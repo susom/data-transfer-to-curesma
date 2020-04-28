@@ -1,27 +1,23 @@
 {
-	"name": "ClassNameHere",
+	"name": "DataTransferToCureSma",
 
-	"namespace": "Stanford\\ClassNameHere",
+	"namespace": "Stanford\\DataTransferToCureSma",
 
-	"description": "A template for a REDCap External Module",
+	"description": "This EM will retrieve data from REDCap, package it in FHIR json format and send it to CureSMA",
 
 	"documentation": "README.md",
 
 	"authors": [
 		{
-			"name": "Andrew Martin",
-			"email": "andy123@stanford.edu",
+			"name": "Lee Ann Yasukawa",
+			"email": "yasukawa@stanford.edu",
 			"institution": "Stanford University"
 		}
 	],
 
 	"permissions": [
-		"redcap_module_system_enable",
-		"redcap_module_project_enable",
-		"redcap_module_save_configuration"
+		"redcap_save_record"
 	],
-	
-	"enable-every-page-hooks-on-system-pages": false,	
 
 	"links": {
 		"project": [
@@ -42,9 +38,26 @@
 			"name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
 			"required": false,
 			"type": "checkbox"
-		}
+		},
+        {
+            "key": "demographic-form",
+            "name": "<b>Select the demographic form</b><br> Select the form which holds the demographic fields",
+            "required": false,
+            "type": "form-list"
+        },
+        {
+            "key": "diagnosis-form",
+            "name": "<b>Select the diagnosis form</b><br> Select the form which holds the diagnosis fields. This form should be repeating so many diagnosis codes can be stored.",
+            "required": false,
+            "type": "form-list"
+        },
+        {
+            "key": "lab-form",
+            "name": "<b>Select the lab form</b><br> Select the form which holds the lab fields. This form should be repeating so many lab values can be stored.",
+            "required": false,
+            "type": "form-list"
+        }
 	],
-
 
 	"system-settings": [
 		{
@@ -52,8 +65,50 @@
 			"name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
 			"required": false,
 			"type": "checkbox"
-		}
-	],
+		},
+        {
+            "key": "submitting-org",
+            "name": "<b>Organization submitting data</b> For Stanford, either SHC or Stanford",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "curesma-url",
+            "name": "<b>URL of CureSMA Registry</b> URL to submit CureSMA Registry Data",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "cert-file",
+            "name": "<b>Certificate file location</b> Certificate file location (path) to use for authorization",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "cert-key",
+            "name": "<b>Certificate key location</b> Certificate key location (path) to use for authorization",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "cert-password",
+            "name": "<b>Certificate password</b> Certificate password used for authorization that must be sent along with the certificate to verify the Stanford site",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "cert-file-data",
+            "name": "<b>Certificate file data</b> Certificate file to use for authorization which will be downloaded and sent via API call",
+            "required": true,
+            "type": "textarea"
+        },
+        {
+            "key": "cert-key-data",
+            "name": "<b>Certificate key data</b> Certificate key to use for authorization which will be downloaded and sent via API call",
+            "required": true,
+            "type": "textarea"
+        }
+    ],
 
 	"compatibility": {
 		"php-version-min": "",
