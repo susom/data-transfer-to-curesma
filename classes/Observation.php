@@ -13,16 +13,17 @@ class Observation {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $pid, $record_id, $study_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $module, $fields;
 
-    public function __construct($pid, $record_id, $smaData, $fhirValues, $module) {
+    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues, $module) {
 
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
         $this->fhir             = $fhirValues;
         $this->module           = $module;
+        $this->study_id         = $study_id;
 
         // These are the patient specific parameters for FHIR format
         $this->instrument = $this->module->getProjectSetting('lab-form');
@@ -147,7 +148,7 @@ class Observation {
 
         // Fill in the subject that this lab belongs to
         $subject        = array(
-            "reference"     => "urn:Patient/$this->record_id"
+            "reference"     => "urn:Patient/$this->study_id"
         );
 
         // Fill in the lab result values

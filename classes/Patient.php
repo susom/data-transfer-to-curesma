@@ -10,16 +10,17 @@ class Patient {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header, $study_id;
     private $idSystem, $idUse, $module, $fields, $raceInfo, $ethnicityInfo;
 
-    public function __construct($pid, $record_id, $smaData, $fhirValues, $module) {
+    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues, $module) {
 
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
         $this->fhir             = $fhirValues;
         $this->module           = $module;
+        $this->study_id         = $study_id;
 
         // Retrieve the instrument that holds the demographics data
         $this->instrument = $this->module->getProjectSetting('demographic-form');
@@ -29,7 +30,7 @@ class Patient {
         $this->fields = REDCap::getFieldNames($this->instrument);
 
         // Determine the URL and header for the API call
-        $this->url = $this->smaData['url'] . '/Patient/' . $this->record_id;
+        $this->url = $this->smaData['url'] . '/Patient/' . $this->study_id;
         $this->header = array("Content-Type:application/json");
 
         // These are the patient specific parameters for FHIR format
@@ -255,7 +256,7 @@ class Patient {
         $patient = array(
             "resourceType"          => "Patient",
             "active"                => "true",
-            "id"                    => $this->record_id,
+            "id"                    => $this->study_id,
             "name"                  => array(
                 $name
             ),

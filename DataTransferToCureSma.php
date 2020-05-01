@@ -29,7 +29,11 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
         // Submit data for each record participating
         foreach($records as $record_id => $record_data) {
-            $this->submitRecordData($pid, $record_id, $smaData, $smaParams);
+            foreach($record_data as $event_id => $event_data) {
+                $study_id = $event_data['default_curesma_id'];
+                $this->emDebug("This is the study id: $study_id");
+                $this->submitRecordData($pid, $record_id, $study_id, $smaData, $smaParams);
+            }
         }
 
         // Delete certificate files
@@ -42,25 +46,26 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
         $filter = "[enrolled_curesma(1)] = '1'";
         $recordField = REDCap::getRecordIdField();
-        $records = REDCap::getData($pid, 'array', null, array($recordField), null, null, null, null, null, $filter);
+        $records = REDCap::getData($pid, 'array', null, array($recordField, 'default_curesma_id'), null, null, null, null, null, $filter);
+        $this->emDebug("Retrieved records: " . json_encode($records));
 
         return $records;
     }
 
-    function submitRecordData($project_id, $record_id, $smaData, $smaParams) {
+    function submitRecordData($project_id, $record_id, $study_id, $smaData, $smaParams) {
 
         try {
 
             // Save Patient data
-            $pat = new Patient($project_id, $record_id, $smaData, $smaParams, $this);
+            $pat = new Patient($project_id, $record_id, $study_id, $smaData, $smaParams, $this);
             $status = $pat->sendPatientData();
 
             // Save diagnostic code data
-            $condition = new Condition($project_id, $record_id, $smaData, $smaParams, $this);
+            $condition = new Condition($project_id, $record_id, $study_id, $smaData, $smaParams, $this);
             $status = $condition->sendConditionData();
 
             // Save lab value data
-            $lab = new Observation($project_id, $record_id, $smaData, $smaParams, $this);
+            $lab = new Observation($project_id, $record_id, $study_id, $smaData, $smaParams, $this);
             $status = $lab->sendObservationData();
 
         } catch (Exception $ex) {
