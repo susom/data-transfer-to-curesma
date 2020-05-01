@@ -16,13 +16,16 @@
 	],
 
 	"permissions": [
-		"redcap_save_record"
 	],
 
 	"links": {
 		"project": [
-
-		],
+            {
+                "name": "Submit Data To CureSMA",
+                "icon": "gear",
+                "url": "pages/controlPanel.php"
+            }
+        ],
 		"control-center": [
 
 		]
@@ -46,16 +49,34 @@
             "type": "form-list"
         },
         {
+            "key": "demographic-event",
+            "name": "<b>Select the event where the demographic form exists</b><br> Select the event where the form which holds the demographic fields exist",
+            "required": false,
+            "type": "event-list"
+        },
+        {
             "key": "diagnosis-form",
             "name": "<b>Select the diagnosis form</b><br> Select the form which holds the diagnosis fields. This form should be repeating so many diagnosis codes can be stored.",
             "required": false,
             "type": "form-list"
         },
         {
+            "key": "diagnosis-event",
+            "name": "<b>Select the diagnosis event</b><br> Select the event which holds the diagnosis form used for submission. This form should be repeating so many diagnosis codes can be stored.",
+            "required": false,
+            "type": "event-list"
+        },
+        {
             "key": "lab-form",
             "name": "<b>Select the lab form</b><br> Select the form which holds the lab fields. This form should be repeating so many lab values can be stored.",
             "required": false,
             "type": "form-list"
+        },
+        {
+            "key": "lab-event",
+            "name": "<b>Select the lab event</b><br> Select the event which holds the lab form used for submission. This form should be repeating so many lab values can be stored.",
+            "required": false,
+            "type": "event-list"
         }
 	],
 

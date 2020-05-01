@@ -4,6 +4,7 @@ namespace Stanford\DataTransferToCureSma;
 require_once "emLoggerTrait.php";
 
 use \Exception;
+use \REDCap;
 
 class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
@@ -11,37 +12,56 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
     public function __construct() {
 		parent::__construct();
-    }
-
-    function redcap_save_record($project_id, $record, $instrument, $event_id)
-    {
         require_once $this->getModulePath() . "classes/Patient.php";
         require_once $this->getModulePath() . "classes/Condition.php";
         require_once $this->getModulePath() . "classes/Observation.php";
-        $this->emDebug("In save record: project id $project_id, record $record, instrument $instrument, event $event_id");
+    }
+
+    // This function can be called by a cron or by a webpage to start submitting data to CureSMA
+    public function submitCureSmaData() {
+        global $pid;
+
+        // Get the certificates so we can submit data
+        list($smaData, $smaParams) = $this->getConnectionParameters();
+
+        // Find records that are participanting in the CureSMA registry
+        $records = $this->getParticipatingRecords($pid);
+
+        // Submit data for each record participating
+        foreach($records as $record_id => $record_data) {
+            $this->submitRecordData($pid, $record_id, $smaData, $smaParams);
+        }
+
+        // Delete certificate files
+        $status = $this->deleteCertFiles(array($smaData['certFile'], $smaData['certKey']));
+        $this->emDebug("Returned from sendPutRequest with return status $status");
+
+    }
+
+    function getParticipatingRecords($pid) {
+
+        $filter = "[enrolled_curesma(1)] = '1'";
+        $recordField = REDCap::getRecordIdField();
+        $records = REDCap::getData($pid, 'array', null, array($recordField), null, null, null, null, null, $filter);
+
+        return $records;
+    }
+
+    function submitRecordData($project_id, $record_id, $smaData, $smaParams) {
 
         try {
-            // Retrieve connection parameters
-            list($smaData, $smaParams) = $this->getConnectionParameters();
 
             // Save Patient data
-            //$pat = new Patient($project_id, $record, $event_id, $smaData, $smaParams, $this);
-            //$status = $pat->sendPatientData();
-
-            // Save lab data
+            $pat = new Patient($project_id, $record_id, $smaData, $smaParams, $this);
+            $status = $pat->sendPatientData();
 
             // Save diagnostic code data
-            //$condition = new Condition($project_id, $record, $event_id, $smaData, $smaParams, $this);
-            //$status = $condition->sendConditionData();
+            $condition = new Condition($project_id, $record_id, $smaData, $smaParams, $this);
+            $status = $condition->sendConditionData();
 
             // Save lab value data
-            $lab = new Observation($project_id, $record, $event_id, $smaData, $smaParams, $this);
+            $lab = new Observation($project_id, $record_id, $smaData, $smaParams, $this);
             $status = $lab->sendObservationData();
-
-
-            // Delete certificate files
-            $status = $this->deleteCertFiles(array($smaData['certFile'], $smaData['certKey']));
-            $this->emDebug("Returned from sendPutRequest with return status $status");
 
         } catch (Exception $ex) {
             $this->emError("Caught exception for project $project_id. Exception: " . $ex);
@@ -104,7 +124,6 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
     function deleteCertFiles($filesToDelete) {
 
         foreach($filesToDelete as $filename) {
-            $this->emDebug("This is the file to delete: " . $filename);
             $status = unlink($filename);
             if ($status) {
                 $this->emDebug("Successfully deleted file $filename");

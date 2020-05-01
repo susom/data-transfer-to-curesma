@@ -16,17 +16,17 @@ class Condition {
     private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $module, $fields;
 
-    public function __construct($pid, $record_id, $event_id, $smaData, $fhirValues, $module) {
+    public function __construct($pid, $record_id, $smaData, $fhirValues, $module) {
 
         $this->pid              = $pid;
         $this->record_id        = $record_id;
-        $this->event_id         = $event_id;
         $this->smaData          = $smaData;
         $this->fhir             = $fhirValues;
         $this->module           = $module;
 
         // These are the patient specific parameters for FHIR format
         $this->instrument = $this->module->getProjectSetting('diagnosis-form');
+        $this->event_id = $this->module->getProjectSetting('diagnosis-event');
 
         // Retrieve the fields on the instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -46,11 +46,11 @@ class Condition {
         // Retrieve patient data for this record
         $conditions = $this->getConditionData();
 
+        $sentInstances = array();
         foreach($conditions[$this->record_id] as $instance => $conditionInfo) {
 
             // Package the data into FHIR format
             list($url, $body) = $this->packageConditionData($conditionInfo);
-            //$body = $this->getData($conditionID);
 
             // Send to CureSMA
             $this->module->emDebug("URL: " . $url);
@@ -60,6 +60,10 @@ class Condition {
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
                 $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Condition " . json_encode($conditionInfo) . " instance $instance. Error $error");
+            } else {
+
+                // Set the checkbox to say the data was sent to CureSMA
+                $this->saveConditionStatus($instance, $conditionInfo);
             }
         }
 
@@ -71,17 +75,34 @@ class Condition {
 
         // Retrieve all diagnosis entries for this record
         try {
-            $filter = "[dx_sent_to_curesma(1)] = ''";
+            $filter = "[dx_sent_to_curesma(1)] = '0'";
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $conditions = $rf->getAllInstances($this->record_id, $this->event_id);
-            $this->module->emDebug("All instances of conditions: " . json_encode($conditions));
         } catch (Exception $ex) {
             $conditions = null;
             $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
 
         return $conditions;
+    }
+
+    private function saveConditionStatus($instance_id, $conditionInfo) {
+
+        // Retrieve all diagnosis entries for this record
+        try {
+            $conditionInfo['dx_sent_to_curesma'] = array('1' => '1');
+            $conditionInfo['dx_date_data_curesma'] = date('Y-m-d H:i:s');
+            $rf = new RepeatingForms($this->pid, $this->instrument);
+            $status = $rf->saveInstance($this->record_id, $conditionInfo, $instance_id, $this->event_id);
+            if (!$status) {
+                $this->module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
+            } else {
+                $this->module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
+            }
+        } catch (Exception $ex) {
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+        }
     }
 
     private function packageConditionData($conditionInfo) {
@@ -148,7 +169,7 @@ class Condition {
             "abatementDateTime"     => $conditionResolvedDate
         );
 
-        $body = json_encode($diagnosis);
+        $body = json_encode($diagnosis, JSON_UNESCAPED_SLASHES);
 
         return array($url, $body);
     }

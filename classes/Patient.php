@@ -13,17 +13,17 @@ class Patient {
     private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $module, $fields, $raceInfo, $ethnicityInfo;
 
-    public function __construct($pid, $record_id, $event_id, $smaData, $fhirValues, $module) {
+    public function __construct($pid, $record_id, $smaData, $fhirValues, $module) {
 
         $this->pid              = $pid;
         $this->record_id        = $record_id;
-        $this->event_id         = $event_id;
         $this->smaData          = $smaData;
         $this->fhir             = $fhirValues;
         $this->module           = $module;
 
         // Retrieve the instrument that holds the demographics data
         $this->instrument = $this->module->getProjectSetting('demographic-form');
+        $this->event_id = $this->module->getProjectSetting('demographic-event');
 
         // Retrieve the fields on this instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -105,7 +105,6 @@ class Patient {
                                         )
             )
         );
-
     }
 
     public function sendPatientData() {
@@ -117,7 +116,9 @@ class Patient {
 
         // Retrieve patient data for this record
         $person = $this->getPatientData();
-        //$this->module->emDebug("Person retrieved: " . json_encode($person));
+        if (empty($person)) {
+            return true;
+        }
 
         // Package the data into FHIR format
         $body = $this->packagePatientData($person);
@@ -130,6 +131,8 @@ class Patient {
         list($status, $error) = $this->sendPutRequest($this->url, $this->header, $body, $this->smaData);
         if (!$status) {
             $this->module->emError("Error sending data for project $this->pid, record $this->record_id. Error $error");
+        } else {
+            $this->savePatientStatus();
         }
 
         return $status;
@@ -138,11 +141,24 @@ class Patient {
     private function getPatientData() {
 
         // Retrieve data for this record
-        $person = REDCap::getData('array', $this->record_id, $this->fields, $this->event_id);
-        //$this->module->emDebug("This is the retrieved person for record $this->record_id: " . json_encode($person));
+        $filter = '[demo_sent_to_curesma(1)] = "0"';
+        $person = REDCap::getData('array', $this->record_id, $this->fields, $this->event_id,
+                                    null, null,null, null, $filter);
 
         return $person;
     }
+
+    private function savePatientStatus() {
+
+        // Set the status that say we've sent the data to CureSMA already
+        $statusFields[$this->record_id][$this->event_id]['demo_sent_to_curesma'] = array('1' => '1');
+        $statusFields[$this->record_id][$this->event_id]['demo_date_sent_curesma'] = date('Y-m-d H:i:s');
+        $status = REDCap::saveData($this->pid, 'array', $statusFields, 'normal', 'YMD');
+        if (!empty($status['errors'])) {
+            $this->module->emError("Error saving status for record $this->record_id. Message: " . json_encode($status));
+        }
+    }
+
 
     private function packagePatientData($person) {
 
@@ -251,49 +267,9 @@ class Patient {
             )
         );
 
-        $body = json_encode($patient);
+        $body = json_encode($patient,JSON_UNESCAPED_SLASHES);
 
         return $body;
     }
-
-    /*
-    private function  sendPutRequest($url, $headers, $message, $smaData) {
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_ENCODING, "");
-        curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 0);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
-        curl_setopt($ch, CURLOPT_SSLENGINE_DEFAULT, 1);
-
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $message);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        curl_setopt($ch, CURLOPT_SSLCERTTYPE, 'PEM');
-        curl_setopt($ch, CURLOPT_SSLCERT, $smaData['certFile']);
-        curl_setopt($ch, CURLOPT_SSLKEY, $smaData['certKey']);
-        curl_setopt($ch, CURLOPT_KEYPASSWD, $smaData['password']);
-
-        // Retrieve all returned information
-        $response = curl_exec($ch);
-        $info = curl_getinfo($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        $this->module->emDebug("HTTP Code: " . $http_code);
-        $this->module->emDebug("Response: " . json_encode($response));
-        $this->module->emDebug("Info: " . json_encode($info));
-        $this->module->emDebug("Error:" . $error);
-
-        if ($http_code == 200) {
-            return array(true, null);
-        } else {
-            return array(false, $error);
-        }
-    }
-    */
 
 }

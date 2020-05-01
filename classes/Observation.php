@@ -16,18 +16,17 @@ class Observation {
     private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $module, $fields;
 
-    public function __construct($pid, $record_id, $event_id, $smaData, $fhirValues, $module) {
+    public function __construct($pid, $record_id, $smaData, $fhirValues, $module) {
 
         $this->pid              = $pid;
         $this->record_id        = $record_id;
-        $this->event_id         = $event_id;
         $this->smaData          = $smaData;
         $this->fhir             = $fhirValues;
         $this->module           = $module;
 
         // These are the patient specific parameters for FHIR format
         $this->instrument = $this->module->getProjectSetting('lab-form');
-        $this->module->emDebug("Lab form: " . $this->instrument);
+        $this->event_id = $this->module->getProjectSetting('lab-event');
 
         // Retrieve the fields on the instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -47,7 +46,7 @@ class Observation {
         // Retrieve patient data for this record
         $observation = $this->getObservationData();
 
-        foreach ($observation[$this->record_id] as $instance => $observationInfo) {
+        foreach ($observation[$this->record_id] as $instance_id => $observationInfo) {
 
             // Package the data into FHIR format
             list($url, $body) = $this->packageObservationData($observationInfo);
@@ -60,6 +59,9 @@ class Observation {
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
                 $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Observation " . json_encode($observationInfo) . " instance $instance. Error $error");
+            } else {
+                // If the resource was successfully sent, update the database to show the data was sent
+                $this->saveObservationStatus($instance_id, $observationInfo);
             }
         }
 
@@ -74,7 +76,6 @@ class Observation {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $labs = $rf->getAllInstances($this->record_id, $this->event_id);
-            $this->module->emDebug("All instances of labs: " . json_encode($labs));
         } catch (Exception $ex) {
             $labs = null;
             $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
@@ -82,6 +83,25 @@ class Observation {
 
         return $labs;
     }
+
+    private function saveObservationStatus($instance_id, $observationInfo) {
+
+        // Retrieve all diagnosis entries for this record
+        try {
+            $observationInfo['lab_sent_to_curesma'] = array('1' => '1');
+            $observationInfo['lab_date_data_curesma'] = date('Y-m-d H:i:s');
+            $rf = new RepeatingForms($this->pid, $this->instrument);
+            $status = $rf->saveInstance($this->record_id, $observationInfo, $instance_id, $this->event_id);
+            if (!$status) {
+                $this->module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
+            } else {
+                $this->module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
+            }
+        } catch (Exception $ex) {
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+        }
+    }
+
 
     private function packageObservationData($labs) {
 
@@ -106,7 +126,7 @@ class Observation {
             array(
                 "coding"  => array(
                     array(
-                        "system"    => $labUrl,
+                        "system"    => htmlspecialchars($labUrl),
                         "code"      => "laboratory",
                         "display"   => "Laboratory"
                     )
@@ -175,7 +195,7 @@ class Observation {
             "referenceRange"    => $referenceRange
         );
 
-        $body = json_encode($lab);
+        $body = json_encode($lab, JSON_UNESCAPED_SLASHES);
 
         return array($url, $body);
     }
