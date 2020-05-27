@@ -14,20 +14,20 @@ class Condition {
     use httpPutTrait;
 
     private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
-    private $idSystem, $idUse, $module, $fields, $study_id;
+    private $idSystem, $idUse, $fields, $study_id;
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues, $module) {
+    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
+        global $module;
 
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
         $this->fhir             = $fhirValues;
-        $this->module           = $module;
         $this->study_id         = $study_id;
 
         // These are the patient specific parameters for FHIR format
-        $this->instrument = $this->module->getProjectSetting('diagnosis-form');
-        $this->event_id = $this->module->getProjectSetting('diagnosis-event');
+        $this->instrument = $module->getProjectSetting('diagnosis-form');
+        $this->event_id = $module->getProjectSetting('diagnosis-event');
 
         // Retrieve the fields on the instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -38,6 +38,7 @@ class Condition {
     }
 
     public function sendConditionData() {
+        global $module;
 
         // If an instrument is not specified for Conditions (Diagnosis), skip processing.
         if (is_null($this->instrument) || empty($this->instrument)) {
@@ -46,6 +47,7 @@ class Condition {
 
         // Retrieve patient data for this record
         $conditions = $this->getConditionData();
+        $module->emDebug("This is the condition data: " . json_encode($conditions));
 
         $sentInstances = array();
         foreach($conditions[$this->record_id] as $instance => $conditionInfo) {
@@ -54,13 +56,13 @@ class Condition {
             list($url, $body) = $this->packageConditionData($conditionInfo);
 
             // Send to CureSMA
-            $this->module->emDebug("URL: " . $url);
-            $this->module->emDebug("Header: " . json_encode($this->header));
-            $this->module->emDebug("Body: " . $body);
+            $module->emDebug("URL: " . $url);
+            $module->emDebug("Header: " . json_encode($this->header));
+            $module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
-                $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Condition " . json_encode($conditionInfo) . " instance $instance. Error $error");
+                $module->emError("Error sending data for project $this->pid, record $this->record_id, Condition " . json_encode($conditionInfo) . " instance $instance. Error $error");
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
@@ -73,6 +75,7 @@ class Condition {
 
 
     private function getConditionData() {
+        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
@@ -82,13 +85,14 @@ class Condition {
             $conditions = $rf->getAllInstances($this->record_id, $this->event_id);
         } catch (Exception $ex) {
             $conditions = null;
-            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
 
         return $conditions;
     }
 
     private function saveConditionStatus($instance_id, $conditionInfo) {
+        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
@@ -97,12 +101,12 @@ class Condition {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $conditionInfo, $instance_id, $this->event_id);
             if (!$status) {
-                $this->module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
+                $module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
             } else {
-                $this->module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
+                $module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
             }
         } catch (Exception $ex) {
-            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
     }
 

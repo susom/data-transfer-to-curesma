@@ -1,11 +1,12 @@
 <?php
 namespace Stanford\DataTransferToCureSma;
-/** @var \Stanford\DataTransferToCureSma\DataTransferToCureSma $this */
+/** @var \Stanford\DataTransferToCureSma\DataTransferToCureSma $module */
 
 trait httpPutTrait
 {
 
     function  sendPutRequest($url, $headers, $message, $smaData) {
+        global $module;
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -31,10 +32,10 @@ trait httpPutTrait
         $error = curl_error($ch);
         curl_close($ch);
 
-        $this->module->emDebug("HTTP Code: " . $http_code);
-        $this->module->emDebug("Response: " . json_encode($response));
-        $this->module->emDebug("Info: " . json_encode($info));
-        $this->module->emDebug("Error:" . $error);
+        $module->emDebug("HTTP Code: " . $http_code);
+        $module->emDebug("Response: " . json_encode($response));
+        $module->emDebug("Info: " . json_encode($info));
+        $module->emDebug("Error:" . $error);
 
         if ($http_code == 200) {
             return array(true, null);

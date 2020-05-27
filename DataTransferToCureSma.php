@@ -57,16 +57,22 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         try {
 
             // Save Patient data
-            $pat = new Patient($project_id, $record_id, $study_id, $smaData, $smaParams, $this);
+            $this->emDebug("Submitting patient data for record $record_id");
+            $pat = new Patient($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $pat->sendPatientData();
+            $this->emDebug("Return from submitting patient data $status");
 
             // Save diagnostic code data
-            $condition = new Condition($project_id, $record_id, $study_id, $smaData, $smaParams, $this);
+            $this->emDebug("Submitting diagnostic code data for record $record_id");
+            $condition = new Condition($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $condition->sendConditionData();
+            $this->emDebug("Return from submitting diagnostic code data $status");
 
             // Save lab value data
-            $lab = new Observation($project_id, $record_id, $study_id, $smaData, $smaParams, $this);
+            $this->emDebug("Submitting lab data for record $record_id");
+            $lab = new Observation($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $lab->sendObservationData();
+            $this->emDebug("Return from submitting lab data $status");
 
         } catch (Exception $ex) {
             $this->emError("Caught exception for project $project_id. Exception: " . $ex);
