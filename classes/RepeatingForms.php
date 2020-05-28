@@ -1,5 +1,5 @@
 <?php
-namespace Stanford\Utilities;
+namespace Stanford\DataTransferToCureSma;
 
 use \REDCap;
 use \Project;
