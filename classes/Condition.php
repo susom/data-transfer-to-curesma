@@ -7,7 +7,6 @@ require_once "RepeatingForms.php";
 
 use REDCap;
 use Exception;
-use Stanford\Utilities\RepeatingForms;
 
 class Condition {
 

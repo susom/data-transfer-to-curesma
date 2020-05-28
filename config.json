@@ -89,7 +89,7 @@
 		},
         {
             "key": "submitting-org",
-            "name": "<b>Organization submitting data</b> For Stanford, either SHC or Stanford",
+            "name": "<b>Organization submitting data</b> For Stanford, either SHC (https://stanfordhealthcare.org/) or Stanford (https://www.stanford.edu/)",
             "required": true,
             "type": "text"
         },
@@ -102,13 +102,13 @@
         {
             "key": "cert-file",
             "name": "<b>Certificate file location</b> Certificate file location (path) to use for authorization",
-            "required": true,
+            "required": false,
             "type": "text"
         },
         {
             "key": "cert-key",
             "name": "<b>Certificate key location</b> Certificate key location (path) to use for authorization",
-            "required": true,
+            "required": false,
             "type": "text"
         },
         {
