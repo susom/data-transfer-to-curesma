@@ -15,6 +15,9 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         require_once $this->getModulePath() . "classes/Patient.php";
         require_once $this->getModulePath() . "classes/Condition.php";
         require_once $this->getModulePath() . "classes/Observation.php";
+        require_once $this->getModulePath() . "classes/Encounter.php";
+        require_once $this->getModulePath() . "classes/Medication.php";
+        require_once $this->getModulePath() . "classes/MedicationStatement.php";
     }
 
     // This function can be called by a cron or by a webpage to start submitting data to CureSMA
@@ -23,6 +26,7 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
         // Get the certificates so we can submit data
         list($smaData, $smaParams) = $this->getConnectionParameters();
+
 
         // Find records that are participanting in the CureSMA registry
         $records = $this->getParticipatingRecords($pid);
@@ -56,23 +60,41 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
         try {
 
-            // Save Patient data
+            // Send Patient data
             $this->emDebug("Submitting patient data for record $record_id");
             $pat = new Patient($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $pat->sendPatientData();
             $this->emDebug("Return from submitting patient data $status");
 
-            // Save diagnostic code data
+            // Send diagnostic code data
             $this->emDebug("Submitting diagnostic code data for record $record_id");
             $condition = new Condition($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $condition->sendConditionData();
             $this->emDebug("Return from submitting diagnostic code data $status");
 
-            // Save lab value data
+            // Send lab value data
             $this->emDebug("Submitting lab data for record $record_id");
             $lab = new Observation($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $lab->sendObservationData();
             $this->emDebug("Return from submitting lab data $status");
+
+            // Send encounter value data
+            $this->emDebug("Submitting encounter data for record $record_id");
+            $lab = new Encounter($project_id, $record_id, $study_id, $smaData, $smaParams);
+            $status = $lab->sendEncounterData();
+            $this->emDebug("Return from submitting encounter data $status");
+
+            // Send Medication value data
+            $this->emDebug("Submitting medication data for record $record_id");
+            $med = new Medication($project_id, $record_id, $study_id, $smaData, $smaParams);
+            $status = $med->sendMedicationData();
+            $this->emDebug("Return from submitting medication data $status");
+
+            // Send Medication Statement value data
+            $this->emDebug("Submitting MedicationStatement data for record $record_id");
+            $med = new MedicationStatement($project_id, $record_id, $study_id, $smaData, $smaParams);
+            $status = $med->sendMedicationStatementData();
+            $this->emDebug("Return from submitting MedicationStatement data $status");
 
         } catch (Exception $ex) {
             $this->emError("Caught exception for project $project_id. Exception: " . $ex);
@@ -86,12 +108,12 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         // This is here temporarily to read in the certificate file and store it in the system settings
         $smaCertFile = $this->getModulePath() . $this->getSystemSetting('cert-file');
         $certFile = file_get_contents($smaCertFile);
-        $this->emDebug("This is the cert file: " . $certFile);
+        //$this->emDebug("This is the cert file: " . $certFile);
         $this->setSystemSetting('cert-file-data', $certFile);
 
         $smaKeyFile = $this->getModulePath() . $this->getSystemSetting('cert-key');
         $certKey = file_get_contents($smaKeyFile);
-        $this->emDebug("This is the cert file: " . $certKey);
+        //$this->emDebug("This is the cert file: " . $certKey);
         $this->setSystemSetting('cert-key-data', $certKey);
         */
 

@@ -77,6 +77,30 @@
             "name": "<b>Select the lab event</b><br> Select the event which holds the lab form used for submission. This form should be repeating so many lab values can be stored.",
             "required": false,
             "type": "event-list"
+        },
+        {
+            "key": "encounter-form",
+            "name": "<b>Select the encounter form</b><br> Select the form which holds the encounter fields. This form should be repeating so many encounters can be saved.",
+            "required": false,
+            "type": "form-list"
+        },
+        {
+            "key": "encounter-event",
+            "name": "<b>Select the encounter event</b><br> Select the event which holds the encounter form used for submission. This form should be repeating so many encounters can be stored.",
+            "required": false,
+            "type": "event-list"
+        },
+        {
+            "key": "medication-form",
+            "name": "<b>Select the medication form</b><br> Select the form which holds the medication fields. This form should be repeating so many mediations can be saved.",
+            "required": false,
+            "type": "form-list"
+        },
+        {
+            "key": "medication-event",
+            "name": "<b>Select the medication event</b><br> Select the event which holds the medication form used for submission. This form should be repeating so many medications can be stored.",
+            "required": false,
+            "type": "event-list"
         }
 	],
 
@@ -128,6 +152,12 @@
             "name": "<b>Certificate key data</b> Certificate key to use for authorization which will be downloaded and sent via API call",
             "required": true,
             "type": "textarea"
+        },
+        {
+            "key": "medication-project",
+            "name": "<b>REDCap project that holds medication list</b> Project which holds list of medications any patient in the cohort has been prescribed",
+            "required": true,
+            "type": "project-id"
         }
     ],
 
