@@ -8,23 +8,17 @@ require_once "RepeatingForms.php";
 use REDCap;
 use Exception;
 
-/*
-{
-  "resourceType": "Encounter",
-  "id": "enc1-stan1-1",
-  "text": {
-    "status": "generated",
-    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Encounter with patient @example</div>"
-  },
-  "status": "in-progress",
-  "subject": {
-    "reference": "urn:Patient/stan-1"
-  },
-  "period": {
-    "end": "2017-01-09T15:30:11",
-    "start": "2017-01-09T14:25:15"
-  }
-}
+/**
+ * The Encounter class packages encounters information to send to CureSMA.  Very little data from each encounter is sent but CureSMA may want
+ * additional data such as vitals.  We are capturing in-person and telemedicine encounters and bypassing encounters that are not treatment
+ * related, such as phone calls for refills, phone calls for appointment changes, etc. or therapy treatments, such as physical or occupational
+ * therapies. In addition to sending the date of the encounter and the encounter type, we are trying to capture whether it is a hospitalization
+ * versus a hospital encounter. Hospital encounter include imaging scans, outpatient procedures, etc.
+ *
+ * Some of the encounters that we send may have to be fine-tuned based on desires from the SMA group and the CureSMA organization.
+ *
+ * Class Encounter
+ * @package Stanford\DataTransferToCureSma
  */
 
 class Encounter {
@@ -55,6 +49,12 @@ class Encounter {
         $this->header = array("Content-Type:application/json");
     }
 
+    /**
+     * This function will find encounters that have not been submitted yet, package them up and send them to CureSMA.  If each packet
+     * was successfully sent, the status for that encounter will be set with a timestamp.
+     *
+     * @return bool|mixed
+     */
     public function sendEncounterData() {
         global $module;
 
@@ -92,6 +92,11 @@ class Encounter {
     }
 
 
+    /**
+     * Finds the encounters that have not yet been set to CureSMA.
+     *
+     * @return array - list of encounters to send
+     */
     private function getEncounterData() {
         global $module;
 
@@ -111,6 +116,12 @@ class Encounter {
         return $encounters;
     }
 
+    /**
+     * Save the fact that we successfully sent the data to CureSMA and the timestamp when the data was sent.
+     *
+     * @param $instance_id
+     * @param $encountersInfo
+     */
     private function saveEncounterStatus($instance_id, $encountersInfo) {
         global $module;
 
@@ -130,13 +141,19 @@ class Encounter {
         }
     }
 
+    /**
+     * Package up the encounter data.  We are currently sending the start time or admit time, discharge time,
+     * encounter type and a description of what the encounter was for.
+     *
+     * @param $encountersInfo
+     * @return array
+     */
     private function packageEncounterData($encountersInfo) {
 
         global $module;
 
         // Retrieve data for this condition
         $encID = $encountersInfo['enc_id'];
-        $encInpatient = $encountersInfo['enc_hospitalized'];
 
         // Add the id of this condition to the URL
         $url = $this->url . $encID;

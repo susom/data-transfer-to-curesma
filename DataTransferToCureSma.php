@@ -6,6 +6,31 @@ require_once "emLoggerTrait.php";
 use \Exception;
 use \REDCap;
 
+/**
+ * This External Module will automate the process of submitting data for consented SMA patients to CureSMA.
+ * Each time this module is run, the list of consented patients will be retrieved but querying for the patients
+ * with the [enrolled_curesma] checkbox selected.  Once the list of patients is found, each patient will be
+ * cycled through for the following resources: Patient (demographics), Condition (Diagnosis codes - currently
+ * only submitting conditions on the problem_list), Encounter, Observation (labs), Medication and MedicationStatement.
+ *
+ * Each resource is saved on a repeating form in the project (except Medication which will be described below).
+ * Each repeating form has a checkbox to indicate if the resource has already been sent to CureSMA and when it
+ * was sent.  Once sent, it will not be sent again.
+ *
+ * The Medication resource is handled differently than the rest of the resources.  The data for the other
+ * resources are self-contained on each repeating form.  The medication resource is based on the whole
+ * patient population.  A Medication resource should only be created once and the MedciationStatment links
+ * the Medication resource to the patient. So, the Medication resource will retrieve the list of
+ * medications that have not be sent to CureSMA yet, and create a Medication resource is a companion
+ * REDCap project pid=20187.  Once the Medication resource is created, the Medication identifier will
+ * be added to each patient medication record so a MedicationStatement can be created.
+ *
+ * This module is enabled for the Stanford SMA Registry pid 19901.
+ *
+ * Class DataTransferToCureSma
+ * @package Stanford\DataTransferToCureSma
+ */
+
 class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
     use emLoggerTrait;
@@ -20,7 +45,13 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         require_once $this->getModulePath() . "classes/MedicationStatement.php";
     }
 
-    // This function can be called by a cron or by a webpage to start submitting data to CureSMA
+    /**
+     * This function can be called by a cron or by a webpage to start submitting data to CureSMA
+     * This function will retrieve the certificates to the CureSMA database and create temporary
+     * files in the REDCap temp space. These files are needed to submit data.
+     *
+     * Once the data is submitted, the temporary files are deleted.
+     */
     public function submitCureSmaData() {
         global $pid;
 
@@ -46,6 +77,12 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
     }
 
+    /**
+     * Find records who are enrolled in the CureSMA registry.
+     *
+     * @param $pid
+     * @return mixed
+     */
     function getParticipatingRecords($pid) {
 
         $filter = "[enrolled_curesma(1)] = '1'";
@@ -56,6 +93,16 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         return $records;
     }
 
+    /**
+     * Run through each FHIR resource for each patient and retrieve the entries that have not been
+     * submitted yet and submit them.
+     *
+     * @param $project_id
+     * @param $record_id
+     * @param $study_id
+     * @param $smaData
+     * @param $smaParams
+     */
     function submitRecordData($project_id, $record_id, $study_id, $smaData, $smaParams) {
 
         try {
@@ -102,6 +149,12 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
     }
 
+    /**
+     * This routine will retrieve the connection parameters to the CureSMA endpoint. Each of the resources
+     * will use these parameters to connect.
+     *
+     * @return array[]
+     */
     function getConnectionParameters() {
 
         /*
@@ -154,6 +207,11 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         return array($smaData, $smaParams);
     }
 
+    /**
+     * This routine will delete the temporary files created to hold the connection certificates.
+     *
+     * @param $filesToDelete
+     */
     function deleteCertFiles($filesToDelete) {
 
         foreach($filesToDelete as $filename) {

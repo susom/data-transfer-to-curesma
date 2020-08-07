@@ -18,7 +18,7 @@ class MedicationStatement {
     use httpPutTrait;
 
     private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header, $study_id;
-    private $idSystem, $idUse, $fields, $rf;
+    private $idSystem, $idUse, $fields;
 
     public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
         global $module;
@@ -85,9 +85,9 @@ class MedicationStatement {
         // Retrieve all medication entries for this record that have not been sent and has a medication reference
         try {
             $filter = "[med_sent_to_curesma(1)] = '0' and [med_list_id] != ''";
-            $this->rf = new RepeatingForms($this->pid, $this->instrument);
-            $this->rf->loadData($this->record_id, $this->event_id, $filter);
-            $medications = $this->rf->getAllInstances($this->record_id, $this->event_id);
+            $rf = new RepeatingForms($this->pid, $this->instrument);
+            $rf->loadData($this->record_id, $this->event_id, $filter);
+            $medications = $rf->getAllInstances($this->record_id, $this->event_id);
             $module->emDebug("Medication list to send: " . json_encode($medications));
 
         } catch (Exception $ex) {
@@ -104,8 +104,9 @@ class MedicationStatement {
         // Retrieve all diagnosis entries for this record
         try {
             $medicationInfo['med_sent_to_curesma'] = array('1' => '1');
-            $medicationInfo['med_date_data_curesma'] = date('Y-m-d H:i:s');
-            $status = $this->rf->saveInstance($this->record_id, $medicationInfo, $instance_id, $this->event_id);
+            $medicationInfo['med_date_sent_to_curesma'] = date('Y-m-d H:i:s');
+            $rf = new RepeatingForms($this->pid, $this->instrument);
+            $status = $rf->saveInstance($this->record_id, $medicationInfo, $instance_id, $this->event_id);
             if (!$status) {
                 $module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
             } else {

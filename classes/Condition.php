@@ -8,6 +8,20 @@ require_once "RepeatingForms.php";
 use REDCap;
 use Exception;
 
+/**
+ * The class will find all Condition (diagnosis) codes for each registered patient and package up each
+ * code and submit the resource to CureSMA. The diagnosis codes that are brought over from STARR are only
+ * problem_list codes since that is what the other institutions are bringing over.  If additional codes are
+ * desired, the query in the redcap_starr_data_query table will need to be updated.
+ *
+ * The amount of data being sent to CureSMA is a minimal set.  We are only packaging up the ICD10 code, whether
+ * or not the condition is still active and the starting date of this condition.  Additional data may be
+ * stored in the REDCap project but may not be sent to CureSMA.
+ *
+ * Class Condition
+ * @package Stanford\DataTransferToCureSma
+ */
+
 class Condition {
 
     use httpPutTrait;
@@ -36,6 +50,13 @@ class Condition {
         $this->header = array("Content-Type:application/json");
     }
 
+    /**
+     * Ensure the Condition resource is selected to be used.  If not, don't send any data. Otherwise,
+     * retrieve the new conditions to send, package them up into the current FHIR v3 format and send
+     * to CureSMA.  If the send was successful, mark the condition as having been sent and save the record.
+     *
+     * @return bool|mixed - true when data was successfully sent to CureSMA
+     */
     public function sendConditionData() {
         global $module;
 
@@ -72,7 +93,11 @@ class Condition {
         return $status;
     }
 
-
+    /**
+     * Retrieve the condition codes that have not been sent to CureSMA yet.
+     *
+     * @return array|bool|null
+     */
     private function getConditionData() {
         global $module;
 
@@ -90,6 +115,12 @@ class Condition {
         return $conditions;
     }
 
+    /**
+     * Save the fact that this condition was already submitted to CureSMA.
+     *
+     * @param $instance_id - Instance of the repeatable form that holds this condition description
+     * @param $conditionInfo - Condition description data
+     */
     private function saveConditionStatus($instance_id, $conditionInfo) {
         global $module;
 
@@ -109,6 +140,13 @@ class Condition {
         }
     }
 
+    /**
+     * This routine will package the condition to send to CureSMA.  If additional information is added
+     * to the message, it shoud be added here.
+     *
+     * @param $conditionInfo - Information about this condition
+     * @return array - URL used to send this resource and the body (package) of the message
+     */
     private function packageConditionData($conditionInfo) {
 
         // Retrieve data for this condition
