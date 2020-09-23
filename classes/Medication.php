@@ -37,7 +37,7 @@ class Medication {
 
     private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $fields, $study_id, $patient_medications;
-    private $next_record_num, $med_list_pid, $med_list_event_id, $med_list_fields, $rf;
+    private $next_record_num, $med_list_pid, $med_list_event_id, $med_list_fields;
 
     public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
         global $module;
@@ -100,6 +100,7 @@ class Medication {
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
+                $module->emDebug("Successfully sent medication ID for project $this->pid, record $this->record_id, Medication " . json_encode($medicationInfo));
                 $this->saveMedicationStatus($record_id, $medicationInfo);
             }
         }
@@ -132,9 +133,16 @@ class Medication {
             $med_list_data = $already_submitted_meds[$snomed_id];
             $medInfo['med_list_id'] = $med_list_data['med_list_id'];
             $module->emDebug("Data to save: " . json_encode($medInfo));
-            $status = $this->rf->saveInstance($this->record_id, $medInfo, $instance_id, $this->event_id);
-            if (!$status) {
-                $module->emError("Unable to save med_list_id for record $this->record_id, instance $instance_id");
+            try {
+                $rf = new RepeatingForms($this->pid, $this->instrument);
+                $status = $rf->saveInstance($this->record_id, $medInfo, $instance_id, $this->event_id);
+                $module->emDebug("Status from save: $status");
+                if (!$status) {
+                    $module->emError("Unable to save med_list_id for record $this->record_id, instance $instance_id with status $status");
+                }
+            } catch (Exception $ex) {
+                $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument to save instance $instance_id");
+
             }
 
         }
@@ -146,10 +154,11 @@ class Medication {
         try {
 
             // Retrieve all the medication from the patient chart for this record which have not yet been submitted
-            $filter = "[med_list_id] = '' and [med_snomed_ct_code] <> '' and [med_sent_to_curesma(1)] = '0'";
-            $this->rf = new RepeatingForms($this->pid, $this->instrument);
-            $this->rf->loadData($this->record_id, $this->event_id, $filter);
-            $this->patient_medications = $this->rf->getAllInstances($this->record_id, $this->event_id);
+            //$filter = "[med_list_id] = '' and [med_snomed_ct_code] <> '' and [med_sent_to_curesma(1)] = '0'";
+            $filter = "[med_list_id] = '' and [med_sent_to_curesma(1)] = '0'";
+            $rf = new RepeatingForms($this->pid, $this->instrument);
+            $rf->loadData($this->record_id, $this->event_id, $filter);
+            $this->patient_medications = $rf->getAllInstances($this->record_id, $this->event_id);
 
             // Retrieve all the snomed ids that have been submitted already
             $med_record = REDCap::getData($this->med_list_pid, 'json');
@@ -208,6 +217,7 @@ class Medication {
         $medicationInfo['med_date_sent_to_curesma'] = date('Y-m-d H:i:s');
         $saveData[$record_id][$this->med_list_event_id] = array_merge(array('record_id' => "$record_id"), $medicationInfo);
         $return = REDCap::saveData($this->med_list_pid, 'array', $saveData);
+        $module->emDebug("Return from save medication: " . json_encode($return));
         if (!empty($return['errors'])) {
             $module->emError("Could not save data for record $record_id, project $this->med_list_pid");
         } else {
@@ -219,6 +229,17 @@ class Medication {
 
         // Retrieve data for this medication. We need to create a new record with a medication id
         $medicationID = $medicationInfo['med_list_id'];
+        $ndc_code = $medicationInfo["med_ndc_code"];
+        $stanford_code = $medicationInfo["med_stanford_med_id"];
+        $snomed_code = $medicationInfo["med_snomed_ct_code"];
+
+        if (empty($ndc_code)) {
+            $med_code = $stanford_code;
+            $system = "https://www.stanford.edu/";
+        } else {
+            $med_code = $ndc_code;
+            $system = "http://hl7.org/fhir/sid/ndc";
+        }
 
         // Add the id of this condition to the URL
         $url = $this->url . $medicationID;
@@ -227,8 +248,8 @@ class Medication {
         $coding = array(
             "coding" => array(
                 array(
-                    "system"    => "http://hl7.org/fhir/sid/ndc",
-                    "code"      => $medicationInfo["med_ndc_code"],
+                    "system"    => $system,
+                    "code"      => $med_code,
                     "display"   => $medicationInfo["med_stanford_description"]
                 )
             )
@@ -241,7 +262,7 @@ class Medication {
                                 "coding" => array(
                                     array(
                                         "system"    => "http://snomed.info/sct",
-                                        "code"      => $medicationInfo["med_snomed_ct_code"],
+                                        "code"      => $snomed_code,
                                         "display"   => $medicationInfo["med_snomed_ct_description"]
                                     )
                                 )
@@ -253,9 +274,11 @@ class Medication {
         $medication = array(
             "resourceType"          => "Medication",
             "id"                    => $medicationID,
-            "code"                  => $coding,
-            "ingredient"            => $ingredient
+            "code"                  => $coding
         );
+        if (!empty($snomed_code)) {
+            $medication["ingredient"] = $ingredient;
+        }
 
         // Check to see if we know if this a brand name medication
         if ($medicationInfo["med_brand_name"] == 1) {
@@ -266,7 +289,6 @@ class Medication {
         if ($medicationInfo["med_otc"] == 1) {
             $medication["isBrand"] = "true";
         }
-
 
         $body = json_encode($medication, JSON_UNESCAPED_SLASHES);
 

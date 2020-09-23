@@ -65,7 +65,7 @@ class Encounter {
 
         // Retrieve patient data for this record
         $encounters = $this->getEncounterData();
-        $module->emDebug("This is the condition data: " . json_encode($encounters));
+        $module->emDebug("This is the encounter data: " . json_encode($encounters));
 
         $sentInstances = array();
         foreach($encounters[$this->record_id] as $instance => $encountersInfo) {
