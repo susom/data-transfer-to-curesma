@@ -35,7 +35,7 @@ class Medication {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $fields, $study_id, $patient_medications;
     private $next_record_num, $med_list_pid, $med_list_event_id, $med_list_fields;
 
@@ -51,6 +51,7 @@ class Medication {
         // These are the patient specific parameters for FHIR format
         $this->instrument = $module->getProjectSetting('medication-form');
         $this->event_id = $module->getProjectSetting('medication-event');
+        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
 
         // Retrieve the fields on the instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -128,7 +129,7 @@ class Medication {
 
         // We've already retrieved the patient medication that we need to update with the
         // Medication resource ID and we still have the class reference so just update each instance
-        foreach ($this->patient_medications[$this->record_id] as $instance_id => $medInfo) {
+        foreach ($this->patient_medications[$this->record_id][$this->event_id] as $instance_id => $medInfo) {
             $snomed_id = $medInfo['med_snomed_ct_code'];
             $med_list_data = $already_submitted_meds[$snomed_id];
             $medInfo['med_list_id'] = $med_list_data['med_list_id'];
@@ -154,8 +155,7 @@ class Medication {
         try {
 
             // Retrieve all the medication from the patient chart for this record which have not yet been submitted
-            //$filter = "[med_list_id] = '' and [med_snomed_ct_code] <> '' and [med_sent_to_curesma(1)] = '0'";
-            $filter = "[med_list_id] = '' and [med_sent_to_curesma(1)] = '0'";
+            $filter = "[" . $this->event_name . "][med_list_id] = '' and [" . $this->event_name . "][med_sent_to_curesma(1)] = '0'";
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $this->patient_medications = $rf->getAllInstances($this->record_id, $this->event_id);
@@ -182,7 +182,7 @@ class Medication {
             // The medication data we are going to send are only medications that have not previously been sent
             // See which of these medications have not been sent yet.
             $snomed_ids_to_be_added = array();
-            foreach ($this->patient_medications[$this->record_id] as $instance_id => $medInfo) {
+            foreach ($this->patient_medications[$this->record_id][$this->event_id] as $instance_id => $medInfo) {
 
                 // See if this medication has already been sent from the Medication List project
                 if (empty($already_submitted_meds[$medInfo['med_snomed_ct_code']])) {

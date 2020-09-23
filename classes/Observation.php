@@ -12,7 +12,7 @@ class Observation {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $study_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $pid, $record_id, $study_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $fields;
 
     public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
@@ -27,6 +27,7 @@ class Observation {
         // These are the patient specific parameters for FHIR format
         $this->instrument = $module->getProjectSetting('lab-form');
         $this->event_id = $module->getProjectSetting('lab-event');
+        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
 
         // Retrieve the fields on the instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -47,8 +48,9 @@ class Observation {
 
         // Retrieve patient data for this record
         $observation = $this->getObservationData();
+        $module->emDebug("Observation data to send: " . json_encode($observation));
 
-        foreach ($observation[$this->record_id] as $instance_id => $observationInfo) {
+        foreach ($observation[$this->record_id][$this->event_id] as $instance_id => $observationInfo) {
 
             // Package the data into FHIR format
             list($url, $body) = $this->packageObservationData($observationInfo);
@@ -75,7 +77,7 @@ class Observation {
 
         // Retrieve all diagnosis entries for this record
         try {
-            $filter = '[lab_sent_to_curesma(1)] = "0"';
+            $filter = '[' . $this->event_name . '][lab_sent_to_curesma(1)] = "0"';
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $labs = $rf->getAllInstances($this->record_id, $this->event_id);

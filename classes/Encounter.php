@@ -25,10 +25,11 @@ class Encounter {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $fields, $study_id;
 
     public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
+
         global $module;
 
         $this->pid              = $pid;
@@ -40,6 +41,7 @@ class Encounter {
         // These are the patient specific parameters for FHIR format
         $this->instrument = $module->getProjectSetting('encounter-form');
         $this->event_id = $module->getProjectSetting('encounter-event');
+        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
 
         // Retrieve the fields on the instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -68,7 +70,7 @@ class Encounter {
         $module->emDebug("This is the encounter data: " . json_encode($encounters));
 
         $sentInstances = array();
-        foreach($encounters[$this->record_id] as $instance => $encountersInfo) {
+        foreach($encounters[$this->record_id][$this->event_id] as $instance => $encountersInfo) {
 
             // Package the data into FHIR format
             list($url, $body) = $this->packageEncounterData($encountersInfo);
@@ -102,12 +104,10 @@ class Encounter {
 
         // Retrieve all diagnosis entries for this record
         try {
-            $filter = "[enc_sent_to_curesma(1)] = '0'";
-            $module->emDebug("In getEncounterData: filter $filter");
+            $filter = "[" . $this->event_name . "][enc_sent_to_curesma(1)] = '0'";
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $encounters = $rf->getAllInstances($this->record_id, $this->event_id);
-            $module->emDebug("Retrieved data: " . json_encode($encounters));
         } catch (Exception $ex) {
             $encounters = null;
             $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");

@@ -26,7 +26,7 @@ class Condition {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
     private $idSystem, $idUse, $fields, $study_id;
 
     public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
@@ -41,6 +41,7 @@ class Condition {
         // These are the patient specific parameters for FHIR format
         $this->instrument = $module->getProjectSetting('diagnosis-form');
         $this->event_id = $module->getProjectSetting('diagnosis-event');
+        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
 
         // Retrieve the fields on the instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -70,7 +71,7 @@ class Condition {
         $module->emDebug("This is the condition data: " . json_encode($conditions));
 
         $sentInstances = array();
-        foreach($conditions[$this->record_id] as $instance => $conditionInfo) {
+        foreach($conditions[$this->record_id][$this->event_id] as $instance => $conditionInfo) {
 
             // Package the data into FHIR format
             list($url, $body) = $this->packageConditionData($conditionInfo);
@@ -103,7 +104,7 @@ class Condition {
 
         // Retrieve all diagnosis entries for this record
         try {
-            $filter = "[dx_sent_to_curesma(1)] = '0'";
+            $filter = "[" . $this->event_name . "][dx_sent_to_curesma(1)] = '0'";
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $conditions = $rf->getAllInstances($this->record_id, $this->event_id);

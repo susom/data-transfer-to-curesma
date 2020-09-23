@@ -17,7 +17,7 @@ class MedicationStatement {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header, $study_id;
+    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header, $study_id;
     private $idSystem, $idUse, $fields;
 
     public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
@@ -32,6 +32,7 @@ class MedicationStatement {
         // These are the patient specific parameters for FHIR format
         $this->instrument = $module->getProjectSetting('medication-form');
         $this->event_id = $module->getProjectSetting('medication-event');
+        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
 
         // Retrieve the fields on the instrument
         $this->fields = REDCap::getFieldNames($this->instrument);
@@ -55,7 +56,7 @@ class MedicationStatement {
         $module->emDebug("This is the medication data: " . json_encode($medications));
 
         $sentInstances = array();
-        foreach($medications[$this->record_id] as $instance => $medicationInfo) {
+        foreach($medications[$this->record_id][$this->event_id] as $instance => $medicationInfo) {
 
             // Package the data into FHIR format
             list($url, $body) = $this->packageMedicationStatementData($medicationInfo);
@@ -84,11 +85,11 @@ class MedicationStatement {
 
         // Retrieve all medication entries for this record that have not been sent and has a medication reference
         try {
-            $filter = "[med_sent_to_curesma(1)] = '0' and [med_list_id] != ''";
+            $filter = "[" . $this->event_name . "][med_sent_to_curesma(1)] = '0' and [" . $this->event_name . "][med_list_id] != ''";
+
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $medications = $rf->getAllInstances($this->record_id, $this->event_id);
-            $module->emDebug("Medication list to send: " . json_encode($medications));
 
         } catch (Exception $ex) {
             $medications = null;
