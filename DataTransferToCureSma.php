@@ -43,6 +43,8 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         require_once $this->getModulePath() . "classes/Encounter.php";
         require_once $this->getModulePath() . "classes/Medication.php";
         require_once $this->getModulePath() . "classes/MedicationStatement.php";
+        require_once $this->getModulePath() . "classes/VitalSigns.php";
+        require_once $this->getModulePath() . "classes/Procedures.php";
     }
 
     /**
@@ -142,6 +144,20 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             $med = new MedicationStatement($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $med->sendMedicationStatementData();
             $this->emDebug("Return from submitting MedicationStatement data $status");
+
+            /*
+            // Send Vital Signs value data
+            $this->emDebug("Submitting vital sign data for record $record_id");
+            $vs = new VitalSigns($project_id, $record_id, $study_id, $smaData, $smaParams);
+            $status = $vs->sendVitalSignData();
+            $this->emDebug("Return from submitting vital sign data $status");
+            */
+
+            // Send Procedure codes
+            $this->emDebug("Submitting procedure data for record $record_id");
+            $vs = new Procedures($project_id, $record_id, $study_id, $smaData, $smaParams);
+            $status = $vs->sendProcedureData();
+            $this->emDebug("Return from submitting Procedure data $status");
 
         } catch (Exception $ex) {
             $this->emError("Caught exception for project $project_id. Exception: " . $ex);

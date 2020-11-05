@@ -101,6 +101,18 @@
             "name": "<b>Select the medication event</b><br> Select the event which holds the medication form used for submission. This form should be repeating so many medications can be stored.",
             "required": false,
             "type": "event-list"
+        },
+        {
+            "key": "procedure-form",
+            "name": "<b>Select the procedure form</b><br> Select the form which holds the procedure fields. This form should be repeating so many procedures can be saved.",
+            "required": false,
+            "type": "form-list"
+        },
+        {
+            "key": "procedure-event",
+            "name": "<b>Select the procedure event</b><br> Select the event which holds the procedure form used for submission. This form should be repeating so many procedure can be stored.",
+            "required": false,
+            "type": "event-list"
         }
 	],
 

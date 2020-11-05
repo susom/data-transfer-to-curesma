@@ -32,14 +32,14 @@ trait httpPutTrait
         $error = curl_error($ch);
         curl_close($ch);
 
-        $module->emDebug("HTTP Code: " . $http_code);
-        $module->emDebug("Response: " . json_encode($response));
-        $module->emDebug("Info: " . json_encode($info));
-        $module->emDebug("Error:" . $error);
 
         if ($http_code == 200) {
             return array(true, null);
         } else {
+            $module->emDebug("HTTP Code: " . $http_code);
+            $module->emDebug("Response: " . json_encode($response));
+            $module->emDebug("Info: " . json_encode($info));
+            $module->emDebug("Error:" . $error);
             return array(false, $error);
         }
     }
