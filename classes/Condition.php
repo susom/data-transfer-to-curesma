@@ -68,7 +68,7 @@ class Condition {
 
         // Retrieve patient data for this record
         $conditions = $this->getConditionData();
-        $module->emDebug("This is the condition data: " . json_encode($conditions));
+        //$module->emDebug("This is the condition data: " . json_encode($conditions));
 
         $sentInstances = array();
         foreach($conditions[$this->record_id][$this->event_id] as $instance => $conditionInfo) {
@@ -77,9 +77,9 @@ class Condition {
             list($url, $body) = $this->packageConditionData($conditionInfo);
 
             // Send to CureSMA
-            $module->emDebug("URL: " . $url);
-            $module->emDebug("Header: " . json_encode($this->header));
-            $module->emDebug("Body: " . $body);
+            //$module->emDebug("URL: " . $url);
+            //$module->emDebug("Header: " . json_encode($this->header));
+            //$module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {

@@ -122,7 +122,7 @@ class Patient {
         $module->emDebug("Retrieving patient data");
         // Retrieve patient data for this record
         $person = $this->getPatientData();
-        $module->emDebug("Person data: " . json_encode($person));
+        //$module->emDebug("Person data: " . json_encode($person));
         if (empty($person)) {
             return true;
         }
@@ -132,9 +132,9 @@ class Patient {
         $body = $this->packagePatientData($person);
 
         // Send to CureSMA
-        $module->emDebug("URL: " . $this->url);
-        $module->emDebug("Header: " . json_encode($this->header));
-        $module->emDebug("Body: " . $body);
+        //$module->emDebug("URL: " . $this->url);
+        //$module->emDebug("Header: " . json_encode($this->header));
+        //$module->emDebug("Body: " . $body);
 
         list($status, $error) = $this->sendPutRequest($this->url, $this->header, $body, $this->smaData);
         if (!$status) {

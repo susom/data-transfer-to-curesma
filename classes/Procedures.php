@@ -88,7 +88,7 @@ class Procedures {
             // Send to CureSMA
             //$module->emDebug("URL: " . $url);
             //$module->emDebug("Header: " . json_encode($this->header));
-            $module->emDebug("Body: " . $body);
+            //$module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {

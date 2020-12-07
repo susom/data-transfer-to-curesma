@@ -93,7 +93,7 @@ class Medication {
             // Send to CureSMA
             //$module->emDebug("Medication URL: " . $url);
             //$module->emDebug("Medication Header: " . json_encode($this->header));
-            $module->emDebug("Medication Body: " . $body);
+            //$module->emDebug("Medication Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
@@ -133,7 +133,7 @@ class Medication {
             $snomed_id = $medInfo['med_snomed_ct_code'];
             $med_list_data = $already_submitted_meds[$snomed_id];
             $medInfo['med_list_id'] = $med_list_data['med_list_id'];
-            $module->emDebug("Data to save: " . json_encode($medInfo));
+            //$module->emDebug("Data to save: " . json_encode($medInfo));
             try {
                 $rf = new RepeatingForms($this->pid, $this->instrument);
                 $status = $rf->saveInstance($this->record_id, $medInfo, $instance_id, $this->event_id);
@@ -196,7 +196,7 @@ class Medication {
                         // Only save the data for the fields that are on the medication list form
                         $data_to_save = array_intersect_key($medInfo, array_flip($this->med_list_fields));
                         $snomed_ids_to_be_added[$next_record] = $data_to_save;
-                        $module->emDebug("snomeds to be added: " . json_encode($data_to_save));
+                        //$module->emDebug("snomeds to be added: " . json_encode($data_to_save));
                     }
                 }
             }
@@ -217,7 +217,7 @@ class Medication {
         $medicationInfo['med_date_sent_to_curesma'] = date('Y-m-d H:i:s');
         $saveData[$record_id][$this->med_list_event_id] = array_merge(array('record_id' => "$record_id"), $medicationInfo);
         $return = REDCap::saveData($this->med_list_pid, 'array', $saveData);
-        $module->emDebug("Return from save medication: " . json_encode($return));
+        //$module->emDebug("Return from save medication: " . json_encode($return));
         if (!empty($return['errors'])) {
             $module->emError("Could not save data for record $record_id, project $this->med_list_pid");
         } else {

@@ -48,7 +48,7 @@ class Observation {
 
         // Retrieve patient data for this record
         $observation = $this->getObservationData();
-        $module->emDebug("Observation data to send: " . json_encode($observation));
+        //$module->emDebug("Observation data to send: " . json_encode($observation));
 
         foreach ($observation[$this->record_id][$this->event_id] as $instance_id => $observationInfo) {
 
@@ -56,9 +56,9 @@ class Observation {
             list($url, $body) = $this->packageObservationData($observationInfo);
 
             // Send to CureSMA
-            $module->emDebug("URL: " . $url);
-            $module->emDebug("Header: " . json_encode($this->header));
-            $module->emDebug("Body: " . $body);
+            //$module->emDebug("URL: " . $url);
+            //$module->emDebug("Header: " . json_encode($this->header));
+            //$module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {

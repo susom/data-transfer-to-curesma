@@ -53,7 +53,7 @@ class MedicationStatement {
 
         // Retrieve patient data for this record
         $medications = $this->getMedicationStatementData();
-        $module->emDebug("This is the medication data: " . json_encode($medications));
+        //$module->emDebug("This is the medication data: " . json_encode($medications));
 
         $sentInstances = array();
         foreach($medications[$this->record_id][$this->event_id] as $instance => $medicationInfo) {
@@ -62,9 +62,9 @@ class MedicationStatement {
             list($url, $body) = $this->packageMedicationStatementData($medicationInfo);
 
             // Send to CureSMA
-            $module->emDebug("Medication URL: " . $url);
-            $module->emDebug("Medication Header: " . json_encode($this->header));
-            $module->emDebug("Medication Body: " . $body);
+            //$module->emDebug("Medication URL: " . $url);
+            //$module->emDebug("Medication Header: " . json_encode($this->header));
+            //$module->emDebug("Medication Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {

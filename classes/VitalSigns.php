@@ -179,7 +179,7 @@ class VitalSigns {
                 );
 
                 $body = json_encode($vitalsPkg, JSON_UNESCAPED_SLASHES);
-                $module->emDebug("Body of message to send: " . $body);
+                //$module->emDebug("Body of message to send: " . $body);
 
                 //  Send the request for this vital
                 list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
@@ -202,7 +202,7 @@ class VitalSigns {
 
             // Weight is coming in ounces and we want it in kg
             $convertedValue = round($value/35.274, 2);
-            $module->emDebug("In weight: initial value: $value, converted value $convertedValue");
+            //$module->emDebug("In weight: initial value: $value, converted value $convertedValue");
 
         } else if ($vitalType == "height") {
 
@@ -212,7 +212,7 @@ class VitalSigns {
             $feet = substr($value, 0, $feetLoc);
             $inch = substr($value, $feetLoc+2, ($inchLoc-$feetLoc-2));
             $convertedValue = round($feet*12 + $inch, 2);
-            $module->emDebug("Converted Height value: " . $convertedValue);
+            //$module->emDebug("Converted Height value: " . $convertedValue);
 
         } else {
             $convertedValue = $value;

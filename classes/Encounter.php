@@ -67,7 +67,7 @@ class Encounter {
 
         // Retrieve patient data for this record
         $encounters = $this->getEncounterData();
-        $module->emDebug("This is the encounter data: " . json_encode($encounters));
+        //$module->emDebug("This is the encounter data: " . json_encode($encounters));
 
         $sentInstances = array();
         foreach($encounters[$this->record_id][$this->event_id] as $instance => $encountersInfo) {
@@ -76,9 +76,9 @@ class Encounter {
             list($url, $body) = $this->packageEncounterData($encountersInfo);
 
             // Send to CureSMA
-            $module->emDebug("URL: " . $url);
-            $module->emDebug("Header: " . json_encode($this->header));
-            $module->emDebug("Body: " . $body);
+            //$module->emDebug("URL: " . $url);
+            //$module->emDebug("Header: " . json_encode($this->header));
+            //$module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
@@ -187,7 +187,7 @@ class Encounter {
         );
 
         $body = json_encode($category, JSON_UNESCAPED_SLASHES);
-        $module->emDebug("Package for encounter: $body");
+        //$module->emDebug("Package for encounter: $body");
 
         return array($url, $body);
     }
