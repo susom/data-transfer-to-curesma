@@ -101,8 +101,8 @@ class Patient {
                 // There is no code for unknown ethnicity
                 "Unknown"           => array
                                         (
-                                            "code"      => "",
-                                            "display"   => "",
+                                            "code"      => "UNK",
+                                            "display"   => "Unknown",
                                             "system" => "urn:oid:2.16.840.1.113883.6.238"
                                         )
             )
