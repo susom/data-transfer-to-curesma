@@ -67,13 +67,13 @@ class Encounter {
 
         // Retrieve patient data for this record
         $encounters = $this->getEncounterData();
-        //$module->emDebug("This is the encounter data: " . json_encode($encounters));
 
         $sentInstances = array();
         foreach($encounters[$this->record_id][$this->event_id] as $instance => $encountersInfo) {
 
             // Package the data into FHIR format
-            list($url, $body) = $this->packageEncounterData($encountersInfo);
+            $enc_id = 'enc-' . $this->record_id . '-' . $instance;
+            list($url, $body) = $this->packageEncounterData($encountersInfo, $enc_id);
 
             // Send to CureSMA
             //$module->emDebug("URL: " . $url);
@@ -86,7 +86,7 @@ class Encounter {
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
-                $this->saveEncounterStatus($instance, $encountersInfo);
+                $this->saveEncounterStatus($instance, $encountersInfo, $enc_id);
             }
         }
 
@@ -122,13 +122,14 @@ class Encounter {
      * @param $instance_id
      * @param $encountersInfo
      */
-    private function saveEncounterStatus($instance_id, $encountersInfo) {
+    private function saveEncounterStatus($instance_id, $encountersInfo, $enc_id) {
         global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
             $encountersInfo['enc_sent_to_curesma'] = array('1' => '1');
             $encountersInfo['enc_date_data_curesma'] = date('Y-m-d H:i:s');
+            $encountersInfo['enc_id'] = $enc_id;
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $encountersInfo, $instance_id, $this->event_id);
             if (!$status) {
@@ -148,15 +149,12 @@ class Encounter {
      * @param $encountersInfo
      * @return array
      */
-    private function packageEncounterData($encountersInfo) {
+    private function packageEncounterData($encountersInfo, $enc_id) {
 
         global $module;
 
-        // Retrieve data for this condition
-        $encID = $encountersInfo['enc_id'];
-
         // Add the id of this condition to the URL
-        $url = $this->url . $encID;
+        $url = $this->url . $enc_id;
 
         // Retrieve the start and end date of this encounter
         if (empty($encountersInfo["enc_end_datetime"])) {
@@ -179,7 +177,7 @@ class Encounter {
         // Package the encounter data for this resource.
         $category = array(
             "resourceType"  => "Encounter",
-            "id"            => "$encID",
+            "id"            => "$enc_id",
             "status"        => $encStatus,
             "text"          => $reason,
             "subject"       => $subject,
@@ -187,7 +185,6 @@ class Encounter {
         );
 
         $body = json_encode($category, JSON_UNESCAPED_SLASHES);
-        //$module->emDebug("Package for encounter: $body");
 
         return array($url, $body);
     }

@@ -53,13 +53,13 @@ class MedicationStatement {
 
         // Retrieve patient data for this record
         $medications = $this->getMedicationStatementData();
-        //$module->emDebug("This is the medication data: " . json_encode($medications));
 
         $sentInstances = array();
-        foreach($medications[$this->record_id][$this->event_id] as $instance => $medicationInfo) {
+        foreach($medications[$this->record_id][$this->event_id] as $instance_id => $medicationInfo) {
 
             // Package the data into FHIR format
-            list($url, $body) = $this->packageMedicationStatementData($medicationInfo);
+            $med_id = 'med-' . $this->record_id . '-' . $instance_id;
+            list($url, $body) = $this->packageMedicationStatementData($medicationInfo, $med_id);
 
             // Send to CureSMA
             //$module->emDebug("Medication URL: " . $url);
@@ -68,11 +68,11 @@ class MedicationStatement {
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
-                $module->emError("Error sending data for project $this->pid, record $this->record_id, Medication " . json_encode($medicationInfo) . " instance $instance. Error $error");
+                $module->emError("Error sending data for project $this->pid, record $this->record_id, Medication " . json_encode($medicationInfo) . " instance $instance_id. Error $error");
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
-                $this->saveMedicationStatementStatus($instance, $medicationInfo);
+                $this->saveMedicationStatementStatus($instance_id, $medicationInfo, $med_id);
             }
         }
 
@@ -99,13 +99,14 @@ class MedicationStatement {
         return $medications;
     }
 
-    private function saveMedicationStatementStatus($instance_id, $medicationInfo) {
+    private function saveMedicationStatementStatus($instance_id, $medicationInfo, $med_id) {
         global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
             $medicationInfo['med_sent_to_curesma'] = array('1' => '1');
-            $medicationInfo['med_date_sent_to_curesma'] = date('Y-m-d H:i:s');
+            $medicationInfo['med_date_data_curesma'] = date('Y-m-d H:i:s');
+            $medicationInfo['med_id'] = $med_id;
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $medicationInfo, $instance_id, $this->event_id);
             if (!$status) {
@@ -118,13 +119,10 @@ class MedicationStatement {
         }
     }
 
-    private function packageMedicationStatementData($medicationInfo) {
-
-        // Retrieve data for this medication
-        $medicationID = $medicationInfo['med_id'];
+    private function packageMedicationStatementData($medicationInfo, $med_id) {
 
         // Add the id of this condition to the URL
-        $url = $this->url . $medicationID;
+        $url = $this->url . $med_id;
 
         // Find the status of this medication: One of active, completed, entered-in-error, intended
         if (empty($medicationInfo['med_end_date'])) {
@@ -164,7 +162,7 @@ class MedicationStatement {
         // Package the complete Condition resource
         $medication = array(
             "resourceType"          => "MedicationStatement",
-            "id"                    => $medicationID,
+            "id"                    => $med_id,
             "text"                  => $text,
             "status"                => $medicationStatus,
             "medicationReference"   => $medRef,

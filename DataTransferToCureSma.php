@@ -145,13 +145,15 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             $status = $med->sendMedicationStatementData();
             $this->emDebug("Return from submitting MedicationStatement data $status");
 
-            // Send Vital Signs value data
+            // Send Vital Signs value data (must be after Encounters since this references the encounter that
+            // the vital sign data was taken)
             $this->emDebug("Submitting vital sign data for record $record_id");
             $vs = new VitalSigns($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $vs->sendVitalSignData();
             $this->emDebug("Return from submitting vital sign data $status");
 
-            // Send Procedure codes
+            // Send Procedure codes (must be after Encounters since this references the encounter when the
+            // procedure takes place)
             $this->emDebug("Submitting procedure data for record $record_id");
             $vs = new Procedures($project_id, $record_id, $study_id, $smaData, $smaParams);
             $status = $vs->sendProcedureData();

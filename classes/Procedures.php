@@ -83,7 +83,8 @@ class Procedures {
             $enc_id = $this->findEncForProcedure($encounters, $procedureInfo['proc_date']);
 
             // Package the data into FHIR format
-            list($url, $body) = $this->packageProcedureData($procedureInfo, $enc_id);
+            $proc_id = 'proc-' . $this->record_id . '-' . $instance;
+            list($url, $body) = $this->packageProcedureData($procedureInfo, $enc_id, $proc_id);
 
             // Send to CureSMA
             //$module->emDebug("URL: " . $url);
@@ -96,7 +97,7 @@ class Procedures {
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
-                $status = $this->saveProcedureStatus($instance, $enc_id);
+                $status = $this->saveProcedureStatus($instance, $enc_id, $proc_id);
             }
         }
 
@@ -192,7 +193,7 @@ class Procedures {
      * @param $instance_id - Instance of the repeatable form that holds this procedure description
      * @param $enc_id - The encounter ID that corresponds to this procedure.
      */
-    private function saveProcedureStatus($instance_id, $enc_id) {
+    private function saveProcedureStatus($instance_id, $enc_id, $proc_id) {
 
         global $module;
 
@@ -202,6 +203,7 @@ class Procedures {
             $procInfo['proc_sent_to_curesma'] = array('1' => '1');
             $procInfo['proc_date_data_curesma'] = date('Y-m-d H:i:s');
             $procInfo['proc_enc_id'] = $enc_id;
+            $procInfo['proc_id'] = $proc_id;
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $procInfo, $instance_id, $this->event_id);
             if (!$status) {
@@ -224,12 +226,11 @@ class Procedures {
      * @param $procedureInfo - Information about this procedure
      * @return array - URL used to send this resource and the body (package) of the message
      */
-    private function packageProcedureData($procedureInfo, $enc_id) {
+    private function packageProcedureData($procedureInfo, $enc_id, $proc_id) {
 
         global $module;
 
         // Retrieve data for this condition
-        $procedureID = $procedureInfo['proc_id'];
         $procedureCode = $procedureInfo['proc_code'];
         $procedureCodeType = $procedureInfo['proc_code_type'];
         $procedureDescription = $procedureInfo['proc_description'];
@@ -237,7 +238,7 @@ class Procedures {
         $procedureStatus = $procedureInfo['proc_status'];
 
         // Add the id of this condition to the URL
-        $url = $this->url . $procedureID;
+        $url = $this->url . $proc_id;
 
         // This is the person who is matched to this condition
         $subject = array(
@@ -271,7 +272,7 @@ class Procedures {
         // Package the complete Procedure resource
         $procedure = array(
             "resourceType"          => "Procedure",
-            "id"                    => $procedureID,
+            "id"                    => $proc_id,
             "status"                => $procedureStatus,
             "code"                  => $code,
             "subject"               => $subject,

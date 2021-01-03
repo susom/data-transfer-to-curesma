@@ -88,7 +88,7 @@ class Medication {
         foreach($medications as $record_id => $medicationInfo) {
 
             // Package the data into FHIR format
-            list($url, $body) = $this->packageMedicationData($record_id, $medicationInfo);
+            list($url, $body) = $this->packageMedicationData($medicationInfo);
 
             // Send to CureSMA
             //$module->emDebug("Medication URL: " . $url);
@@ -137,7 +137,7 @@ class Medication {
             try {
                 $rf = new RepeatingForms($this->pid, $this->instrument);
                 $status = $rf->saveInstance($this->record_id, $medInfo, $instance_id, $this->event_id);
-                $module->emDebug("Status from save: $status");
+                $module->emDebug("Status from update medication list ID: $status for record $this->record_id instance $instance_id");
                 if (!$status) {
                     $module->emError("Unable to save med_list_id for record $this->record_id, instance $instance_id with status $status");
                 }
@@ -225,7 +225,7 @@ class Medication {
         }
     }
 
-    private function packageMedicationData($record_id, $medicationInfo) {
+    private function packageMedicationData($medicationInfo) {
 
         // Retrieve data for this medication. We need to create a new record with a medication id
         $medicationID = $medicationInfo['med_list_id'];

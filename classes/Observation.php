@@ -53,7 +53,8 @@ class Observation {
         foreach ($observation[$this->record_id][$this->event_id] as $instance_id => $observationInfo) {
 
             // Package the data into FHIR format
-            list($url, $body) = $this->packageObservationData($observationInfo);
+            $lab_id = 'lab-' . $this->record_id . '-' . $instance_id;
+            list($url, $body) = $this->packageObservationData($observationInfo, $lab_id);
 
             // Send to CureSMA
             //$module->emDebug("URL: " . $url);
@@ -65,7 +66,7 @@ class Observation {
                 $module->emError("Error sending data for project $this->pid, record $this->record_id, Observation " . json_encode($observationInfo) . " instance $instance_id. Error $error");
             } else {
                 // If the resource was successfully sent, update the database to show the data was sent
-                $this->saveObservationStatus($instance_id, $observationInfo);
+                $this->saveObservationStatus($instance_id, $observationInfo, $lab_id);
             }
         }
 
@@ -89,13 +90,14 @@ class Observation {
         return $labs;
     }
 
-    private function saveObservationStatus($instance_id, $observationInfo) {
+    private function saveObservationStatus($instance_id, $observationInfo, $lab_id) {
         global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
             $observationInfo['lab_sent_to_curesma'] = array('1' => '1');
             $observationInfo['lab_date_data_curesma'] = date('Y-m-d H:i:s');
+            $observationInfo['lab_id'] = $lab_id;
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $observationInfo, $instance_id, $this->event_id);
             if (!$status) {
@@ -109,12 +111,11 @@ class Observation {
     }
 
 
-    private function packageObservationData($labs) {
+    private function packageObservationData($labs, $lab_id) {
 
         global $module;
 
         // Retrieve the data for this lab result
-        $labId = $labs['lab_id'];
         $labDateTime = $labs['lab_date_time'];
         $labLoincCode = $labs['lab_loinc'];
         $labDescription = $labs['lab_loinc_description'];
@@ -126,7 +127,7 @@ class Observation {
         $labComponentId = $labs['lab_component_id'];
 
         // Add the id to the URL
-        $url = $this->url  . $labId;
+        $url = $this->url  . $lab_id;
         $labUrl = "http://terminology.hl7.org/CodeSystem/observation-category";
         $unitUrl = "http://unitsofmeasure.org";
 
@@ -172,12 +173,6 @@ class Observation {
         $subject        = array(
             "reference"     => "urn:Patient/$this->study_id"
         );
-
-        // INR labs have INR as units which is incorrect.  Since INR values are ratios, I am going to
-        // clear out INR so that CureSMA will accept it
-        if ($labUnits == 'INR') {
-            $labUnits = '%';
-        }
 
         // Fill in the lab result values.  Check to see if it is number or string
         $valueQuantity  = array(
@@ -237,7 +232,7 @@ class Observation {
 
         $lab = array(
             "resourceType"      => "Observation",
-            "id"                => $labId,
+            "id"                => $lab_id,
             "status"            => $labResultStatus,
             "code"              => $codeCoding,
             "category"          => $categoryCoding,

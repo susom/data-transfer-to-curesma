@@ -74,7 +74,8 @@ class Condition {
         foreach($conditions[$this->record_id][$this->event_id] as $instance => $conditionInfo) {
 
             // Package the data into FHIR format
-            list($url, $body) = $this->packageConditionData($conditionInfo);
+            $dx_id =  'dx-' . $this->record_id . '-' . $instance;
+            list($url, $body) = $this->packageConditionData($conditionInfo, $dx_id);
 
             // Send to CureSMA
             //$module->emDebug("URL: " . $url);
@@ -87,7 +88,7 @@ class Condition {
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
-                $this->saveConditionStatus($instance, $conditionInfo);
+                $this->saveConditionStatus($instance, $conditionInfo, $dx_id);
             }
         }
 
@@ -122,13 +123,14 @@ class Condition {
      * @param $instance_id - Instance of the repeatable form that holds this condition description
      * @param $conditionInfo - Condition description data
      */
-    private function saveConditionStatus($instance_id, $conditionInfo) {
+    private function saveConditionStatus($instance_id, $conditionInfo, $dx_id) {
         global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
             $conditionInfo['dx_sent_to_curesma'] = array('1' => '1');
             $conditionInfo['dx_date_data_curesma'] = date('Y-m-d H:i:s');
+            $conditionInfo['dx_id'] = $dx_id;
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $conditionInfo, $instance_id, $this->event_id);
             if (!$status) {
@@ -148,10 +150,10 @@ class Condition {
      * @param $conditionInfo - Information about this condition
      * @return array - URL used to send this resource and the body (package) of the message
      */
-    private function packageConditionData($conditionInfo) {
+    private function packageConditionData($conditionInfo, $dx_id) {
 
         // Retrieve data for this condition
-        $conditionID = $conditionInfo['dx_id'];
+        $conditionID = $dx_id;
         $conditionCode = $conditionInfo['dx_code'];
         $conditionDescription = $conditionInfo['dx_description'];
         $conditionStartDate = $conditionInfo['dx_start_date'];

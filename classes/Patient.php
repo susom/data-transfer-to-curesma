@@ -113,16 +113,13 @@ class Patient {
     public function sendPatientData() {
         global $module;
 
-        $module->emDebug("In sendPatientData for record $this->record_id for instrument " . $this->instrument);
         // If a demographics form is not specified, skip processing of patients
         if (is_null($this->instrument) || empty($this->instrument)) {
             return true;
         }
 
-        $module->emDebug("Retrieving patient data");
         // Retrieve patient data for this record
         $person = $this->getPatientData();
-        //$module->emDebug("Person data: " . json_encode($person));
         if (empty($person)) {
             return true;
         }

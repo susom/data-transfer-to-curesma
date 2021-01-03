@@ -70,7 +70,7 @@ class VitalSigns {
                 if ($status) {
 
                     // If the resource was successfully sent, update the database to show the data was sent
-                    $status = $this->saveVitalSignStatus($instance_id, $vitalSignInfo);
+                    $status = $this->saveVitalSignStatus($instance_id);
                 }
             }
         }
@@ -221,7 +221,7 @@ class VitalSigns {
         return $convertedValue;
     }
 
-    private function saveVitalSignStatus($instance_id, $vitalSignInfo) {
+    private function saveVitalSignStatus($instance_id) {
         global $module;
 
         $status = false;
