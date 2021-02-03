@@ -35,6 +35,8 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
 
     use emLoggerTrait;
 
+    private $resources;
+
     public function __construct() {
 		parent::__construct();
         require_once $this->getModulePath() . "classes/Patient.php";
@@ -43,8 +45,26 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         require_once $this->getModulePath() . "classes/Encounter.php";
         require_once $this->getModulePath() . "classes/Medication.php";
         require_once $this->getModulePath() . "classes/MedicationStatement.php";
-        require_once $this->getModulePath() . "classes/VitalSigns.php";
         require_once $this->getModulePath() . "classes/Procedures.php";
+        require_once $this->getModulePath() . "classes/VitalSigns.php";
+
+    }
+
+    /**
+     * Return the list of FHIR resources that are available.
+     *
+     * @return mixed
+     */
+    public function retrieveResources() {
+        $resources = array("demo"       => "Patient",
+            "dx"        => "Conditions",
+            "lab"       => "Observations",
+            "enc"       => "Encounters",
+            "med"       => "Medications",
+            "px"        => "Procedures",
+            "vitals"    => "VitalSigns");
+
+        return $resources;
     }
 
     /**
@@ -54,29 +74,37 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
      *
      * Once the data is submitted, the temporary files are deleted.
      */
-    public function submitCureSmaData() {
+    public function submitCureSmaData($resourcesToSend) {
         global $pid;
 
         // Get the certificates so we can submit data
         list($smaData, $smaParams) = $this->getConnectionParameters();
 
-
         // Find records that are participanting in the CureSMA registry
         $records = $this->getParticipatingRecords($pid);
+
+        // If Procedures or Vital Signs are selected, ensure that Encounters is also selected
+        // because Encounters is required for those resources
+        if (((strpos($resourcesToSend, 'px') !== false) or (strpos($resourcesToSend, 'vitals') !== false))
+            and (strpos($resourcesToSend, 'enc') === false)) {
+            // Add encounter
+            $resourcesToSend .= ",enc";
+        }
 
         // Submit data for each record participating
         foreach($records as $record_id => $record_data) {
             foreach($record_data as $event_id => $event_data) {
                 $study_id = $event_data['default_curesma_id'];
                 $this->emDebug("This is the study id: $study_id");
-                $this->submitRecordData($pid, $record_id, $study_id, $smaData, $smaParams);
-            }
+                $status = $this->submitRecordData($pid, $record_id, $study_id, $smaData, $smaParams, $resourcesToSend);
+           }
         }
 
         // Delete certificate files
         $status = $this->deleteCertFiles(array($smaData['certFile'], $smaData['certKey']));
         $this->emDebug("Returned from sendPutRequest with return status $status");
 
+        return $status;
     }
 
     /**
@@ -105,64 +133,76 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
      * @param $smaData
      * @param $smaParams
      */
-    function submitRecordData($project_id, $record_id, $study_id, $smaData, $smaParams) {
+    function submitRecordData($project_id, $record_id, $study_id, $smaData, $smaParams, $resourcesToSend) {
 
         try {
-
             // Send Patient data
-            $this->emDebug("Submitting patient data for record $record_id");
-            $pat = new Patient($project_id, $record_id, $study_id, $smaData, $smaParams);
-            $status = $pat->sendPatientData();
-            $this->emDebug("Return from submitting patient data $status");
+            if (strpos($resourcesToSend, 'demo') !== false) {
+                $this->emDebug("Submitting patient data for record $record_id");
+                $pat = new Patient($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $pat->sendPatientData();
+                $this->emDebug("Return from submitting patient data $status");
+            }
 
             // Send diagnostic code data
-            $this->emDebug("Submitting diagnostic code data for record $record_id");
-            $condition = new Condition($project_id, $record_id, $study_id, $smaData, $smaParams);
-            $status = $condition->sendConditionData();
-            $this->emDebug("Return from submitting diagnostic code data $status");
+            if (strpos($resourcesToSend, 'dx') !== false) {
+                $this->emDebug("Submitting diagnostic code data for record $record_id");
+                $condition = new Condition($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $condition->sendConditionData();
+                $this->emDebug("Return from submitting diagnostic code data $status");
+            }
 
             // Send lab value data
-            $this->emDebug("Submitting lab data for record $record_id");
-            $lab = new Observation($project_id, $record_id, $study_id, $smaData, $smaParams);
-            $status = $lab->sendObservationData();
-            $this->emDebug("Return from submitting lab data $status");
+            if (strpos($resourcesToSend, 'lab') !== false) {
+                $this->emDebug("Submitting lab data for record $record_id");
+                $lab = new Observation($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $lab->sendObservationData();
+                $this->emDebug("Return from submitting lab data $status");
+            }
 
             // Send encounter value data
-            $this->emDebug("Submitting encounter data for record $record_id");
-            $lab = new Encounter($project_id, $record_id, $study_id, $smaData, $smaParams);
-            $status = $lab->sendEncounterData();
-            $this->emDebug("Return from submitting encounter data $status");
+            if (strpos($resourcesToSend, 'enc') !== false) {
+                $this->emDebug("Submitting encounter data for record $record_id");
+                $lab = new Encounter($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $lab->sendEncounterData();
+                $this->emDebug("Return from submitting encounter data $status");
+            }
 
             // Send Medication value data
-            $this->emDebug("Submitting medication data for record $record_id");
-            $med = new Medication($project_id, $record_id, $study_id, $smaData, $smaParams);
-            $status = $med->sendMedicationData();
-            $this->emDebug("Return from submitting medication data $status");
+            if (strpos($resourcesToSend, 'med') !== false) {
+                $this->emDebug("Submitting medication data for record $record_id");
+                $med = new Medication($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $med->sendMedicationData();
+                $this->emDebug("Return from submitting medication data $status");
 
-            // Send Medication Statement value data
-            $this->emDebug("Submitting MedicationStatement data for record $record_id");
-            $med = new MedicationStatement($project_id, $record_id, $study_id, $smaData, $smaParams);
-            $status = $med->sendMedicationStatementData();
-            $this->emDebug("Return from submitting MedicationStatement data $status");
-
-            // Send Vital Signs value data (must be after Encounters since this references the encounter that
-            // the vital sign data was taken)
-            $this->emDebug("Submitting vital sign data for record $record_id");
-            $vs = new VitalSigns($project_id, $record_id, $study_id, $smaData, $smaParams);
-            $status = $vs->sendVitalSignData();
-            $this->emDebug("Return from submitting vital sign data $status");
+                // Send Medication Statement value data
+                $this->emDebug("Submitting MedicationStatement data for record $record_id");
+                $med = new MedicationStatement($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $med->sendMedicationStatementData();
+                $this->emDebug("Return from submitting MedicationStatement data $status");
+            }
 
             // Send Procedure codes (must be after Encounters since this references the encounter when the
             // procedure takes place)
-            $this->emDebug("Submitting procedure data for record $record_id");
-            $vs = new Procedures($project_id, $record_id, $study_id, $smaData, $smaParams);
-            $status = $vs->sendProcedureData();
-            $this->emDebug("Return from submitting Procedure data $status");
+            if (strpos($resourcesToSend, 'px') !== false) {
+                $this->emDebug("Submitting procedure data for record $record_id");
+                $px = new Procedures($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $px->sendProcedureData();
+                $this->emDebug("Return from submitting Procedure data $status");
+            }
+
+            // Send Vital Signs value data (must be after Encounters since this references the encounter that
+            // the vital sign data was taken)
+            if (strpos($resourcesToSend, 'vitals') !== false) {
+                $this->emDebug("Submitting vital sign data for record $record_id");
+                $vs = new VitalSigns($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $vs->sendVitalSignData();
+                $this->emDebug("Return from submitting vital sign data $status");
+            }
 
         } catch (Exception $ex) {
             $this->emError("Caught exception for project $project_id. Exception: " . $ex);
         }
-
     }
 
     /**
