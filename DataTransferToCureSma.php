@@ -47,7 +47,7 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         require_once $this->getModulePath() . "classes/MedicationStatement.php";
         require_once $this->getModulePath() . "classes/Procedures.php";
         require_once $this->getModulePath() . "classes/VitalSigns.php";
-
+        require_once $this->getModulePath() . "classes/Allergies.php";
     }
 
     /**
@@ -62,7 +62,8 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             "enc"       => "Encounters",
             "med"       => "Medications",
             "px"        => "Procedures",
-            "vitals"    => "VitalSigns");
+            "vitals"    => "VitalSigns",
+            "all"       => "Allergies");
 
         return $resources;
     }
@@ -199,6 +200,15 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
                 $status = $vs->sendVitalSignData();
                 $this->emDebug("Return from submitting vital sign data $status");
             }
+
+            // Send AllergyIntolerance data
+            if (strpos($resourcesToSend, 'all') !== false) {
+                $this->emDebug("Submitting allergies data for record $record_id");
+                $allergy = new Allergies($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $status = $allergy->sendAllergyData();
+                $this->emDebug("Return from submitting allergies data $status");
+            }
+
 
         } catch (Exception $ex) {
             $this->emError("Caught exception for project $project_id. Exception: " . $ex);
