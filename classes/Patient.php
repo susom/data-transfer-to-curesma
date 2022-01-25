@@ -134,6 +134,7 @@ class Patient {
         //$module->emDebug("Body: " . $body);
 
         list($status, $error) = $this->sendPutRequest($this->url, $this->header, $body, $this->smaData);
+        //$module->emDebug("Return from submission for Patient resource, status: " . $status . ", error: " . $error);
         if (!$status) {
             $module->emError("Error sending data for project $this->pid, record $this->record_id. Error $error");
         } else {
@@ -257,6 +258,19 @@ class Patient {
             );
         }
 
+        // Add the patient's address
+        $address = array(
+            "use"       => "home",
+            "line"      => array(
+                $person[$this->record_id][$this->event_id]["street"]
+            ),
+            "city"          => $person[$this->record_id][$this->event_id]["city"],
+            "state"         => $person[$this->record_id][$this->event_id]["state_text"],
+            "postalCode"    => $person[$this->record_id][$this->event_id]["zip"],
+            "country"       => $person[$this->record_id][$this->event_id]["country_text"]
+        );
+
+
         // Put together the Patient resource with all the elements we are sending to CureSMA
         $patient = array(
             "resourceType"          => "Patient",
@@ -270,6 +284,9 @@ class Patient {
             "birthDate"             => $person[$this->record_id][$this->event_id]["dob"],
             "identifier"            => array(
                 $identifier
+            ),
+            "address"               => array (
+                $address
             )
         );
 
