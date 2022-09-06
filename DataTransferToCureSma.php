@@ -56,7 +56,8 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
      * @return mixed
      */
     public function retrieveResources() {
-        $resources = array("demo"       => "Patient",
+        $resources = array(
+            "demo"      => "Patient",
             "dx"        => "Conditions",
             "lab"       => "Observations",
             "enc"       => "Encounters",
@@ -69,20 +70,109 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
     }
 
     /**
-     * This function can be called by a cron or by a webpage to start submitting data to CureSMA
+     * CRON JOBS
+     *
+     * Since REDCap works better with more, smaller crons instead of one big cron, I'll submit data
+     * for each resource independently.  The Procedures and Vitals are going together since the
+     * Encounters get added when either are submitted so might as well submit them all together. All these
+     * crons will run on Saturday and just start them depending on what hour it is. Leaving labs until
+     * the end since they will probably take the longest.
+     *      Demographics                        -  8 am
+     *      Procedure, Vitals and Encounters    -  9 am
+     *      Diagnosis                           - 10 am
+     *      Medications                         - 11 am
+     *      Allergies                           - 12 pm
+     *      Labs                                -  1 pm
+     */
+
+    public function sendToCureSMA() {
+
+        // Retrieve day and time it is now to see if the crons should run
+        $dayOfWeek = trim(date("l"));
+        $hourOfDay = trim(date("H"));
+        $this->emDebug("Hour of Day: " . $hourOfDay);
+        $this->emDebug("Day of Week: " . $dayOfWeek);
+
+        if ($dayOfWeek == 'Saturday') {
+            if ($hourOfDay == 8) {
+                $this->emDebug("Running cron for demo");
+                $this->cronToSubmitDataToCureSMA("demo");
+                $this->emDebug("Finished running cron for demo");
+            } else if ($hourOfDay == 9) {
+                $this->emDebug("Running cron for px,vitals");
+                $this->cronToSubmitDataToCureSMA("px,vitals");
+                $this->emDebug("Finished running cron for px,vitals");
+            } else if ($hourOfDay == 10) {
+                $this->emDebug("Running cron for dx");
+                $this->cronToSubmitDataToCureSMA("dx");
+                $this->emDebug("Finished running cron for dx");
+            } else if ($hourOfDay == 11) {
+                $this->emDebug("Running cron for med");
+                $this->cronToSubmitDataToCureSMA("med");
+                $this->emDebug("Finished running cron for med");
+            } else if ($hourOfDay == 12) {
+                $this->emDebug("Running cron for all");
+                $this->cronToSubmitDataToCureSMA("all");
+                $this->emDebug("Finished running cron for all");
+            } else if ($hourOfDay == 13) {
+                $this->emDebug("Running cron for lab");
+                $this->cronToSubmitDataToCureSMA("lab");
+                $this->emDebug("Finished running cron for lab");
+            }
+        }
+    }
+
+
+    /**
+     * This function will be called by the cron job.
+     *
+     * @param $resourcesToSend
+     * @return void
+     */
+    public function cronToSubmitDataToCureSMA($resourcesToSend) {
+
+        $this->emDebug("Starting DataTransfer To CureSMA for resources $resourcesToSend");
+
+        // Save pid so we can replace it after we are done processing
+        $originalPid = $_GET['pid'];
+
+        // There should only be one project with this enabled
+        foreach($this->getProjectsWithModuleEnabled() as $localProjectId) {
+            $_GET['pid'] = $localProjectId;
+            $this->emDebug("Working on PID: " . $localProjectId);
+            $status = $this->submitCureSmaData($resourcesToSend, $localProjectId);
+        }
+
+        // Put back original pid
+        $_GET['pid'] = $originalPid;
+        $this->emDebug("Leaving DataTransfer To CureSMA for resources $resourcesToSend");
+        return;
+    }
+
+    /**
+     * This function can be called by a cron to start submitting data to CureSMA
      * This function will retrieve the certificates to the CureSMA database and create temporary
      * files in the REDCap temp space. These files are needed to submit data.
      *
      * Once the data is submitted, the temporary files are deleted.
      */
-    public function submitCureSmaData($resourcesToSend) {
-        global $pid;
+    /**
+     * @param $resourcesToSend
+     * @param $pid
+     * @return bool $status
+     */
+    public function submitCureSmaData($resourcesToSend, $pid) {
 
         // Get the certificates so we can submit data
         list($smaData, $smaParams) = $this->getConnectionParameters();
+        if (empty($smaData) or empty($smaParams)) {
+            $this->emError("Could not retrieve connection parameters to CureSMA for resources " . $resourcesToSend);
+            return false;
+        }
 
         // Find records that are participanting in the CureSMA registry
         $records = $this->getParticipatingRecords($pid);
+        //$this->emDebug("Participants: " . json_encode($records));
 
         // If Procedures or Vital Signs are selected, ensure that Encounters is also selected
         // because Encounters is required for those resources
@@ -96,13 +186,12 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         foreach($records as $record_id => $record_data) {
             foreach($record_data as $event_id => $event_data) {
                 $study_id = $event_data['default_curesma_id'];
-                $this->emDebug("This is the study id: $study_id");
                 $status = $this->submitRecordData($pid, $record_id, $study_id, $smaData, $smaParams, $resourcesToSend);
            }
         }
 
         // Delete certificate files
-        $status = $this->deleteCertFiles(array($smaData['certFile'], $smaData['certKey']));
+        $this->deleteCertFiles(array($smaData['certFile'], $smaData['certKey']));
         $this->emDebug("Returned from sendPutRequest with return status $status");
 
         return $status;
@@ -117,14 +206,15 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
     function getParticipatingRecords($pid) {
 
         $filter = "[enrolled_curesma(1)] = '1'";
-        $recordField = REDCap::getRecordIdField();
+        $recordField = $this->getRecordIdField();
         $records = REDCap::getData($pid, 'array', null, array($recordField, 'default_curesma_id'), null, null, null, null, null, $filter);
-        $this->emDebug("Retrieved records: " . json_encode($records));
 
         return $records;
     }
 
     /**
+     * Run through all the resources and see which ones should be sent.
+     *
      * Run through each FHIR resource for each patient and retrieve the entries that have not been
      * submitted yet and submit them.
      *
@@ -140,7 +230,7 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             // Send Patient data
             if (strpos($resourcesToSend, 'demo') !== false) {
                 $this->emDebug("Submitting patient data for record $record_id");
-                $pat = new Patient($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $pat = new Patient($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $pat->sendPatientData();
                 $this->emDebug("Return from submitting patient data $status");
             }
@@ -148,15 +238,15 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             // Send diagnostic code data
             if (strpos($resourcesToSend, 'dx') !== false) {
                 $this->emDebug("Submitting diagnostic code data for record $record_id");
-                $condition = new Condition($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $condition = new Condition($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $condition->sendConditionData();
-                $this->emDebug("Return from submitting diagnostic code data $status");
+                $this->emDebug("Return from submitting diagnostic code data $status for record $record_id");
             }
 
             // Send lab value data
             if (strpos($resourcesToSend, 'lab') !== false) {
                 $this->emDebug("Submitting lab data for record $record_id");
-                $lab = new Observation($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $lab = new Observation($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $lab->sendObservationData();
                 $this->emDebug("Return from submitting lab data $status");
             }
@@ -164,7 +254,7 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             // Send encounter value data
             if (strpos($resourcesToSend, 'enc') !== false) {
                 $this->emDebug("Submitting encounter data for record $record_id");
-                $lab = new Encounter($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $lab = new Encounter($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $lab->sendEncounterData();
                 $this->emDebug("Return from submitting encounter data $status");
             }
@@ -172,13 +262,13 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             // Send Medication value data
             if (strpos($resourcesToSend, 'med') !== false) {
                 $this->emDebug("Submitting medication data for record $record_id");
-                $med = new Medication($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $med = new Medication($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $med->sendMedicationData();
                 $this->emDebug("Return from submitting medication data $status");
 
                 // Send Medication Statement value data
                 $this->emDebug("Submitting MedicationStatement data for record $record_id");
-                $med = new MedicationStatement($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $med = new MedicationStatement($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $med->sendMedicationStatementData();
                 $this->emDebug("Return from submitting MedicationStatement data $status");
             }
@@ -187,7 +277,7 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             // procedure takes place)
             if (strpos($resourcesToSend, 'px') !== false) {
                 $this->emDebug("Submitting procedure data for record $record_id");
-                $px = new Procedures($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $px = new Procedures($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $px->sendProcedureData();
                 $this->emDebug("Return from submitting Procedure data $status");
             }
@@ -196,7 +286,7 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             // the vital sign data was taken)
             if (strpos($resourcesToSend, 'vitals') !== false) {
                 $this->emDebug("Submitting vital sign data for record $record_id");
-                $vs = new VitalSigns($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $vs = new VitalSigns($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $vs->sendVitalSignData();
                 $this->emDebug("Return from submitting vital sign data $status");
             }
@@ -204,7 +294,7 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
             // Send AllergyIntolerance data
             if (strpos($resourcesToSend, 'all') !== false) {
                 $this->emDebug("Submitting allergies data for record $record_id");
-                $allergy = new Allergies($project_id, $record_id, $study_id, $smaData, $smaParams);
+                $allergy = new Allergies($this, $project_id, $record_id, $study_id, $smaData, $smaParams);
                 $status = $allergy->sendAllergyData();
                 $this->emDebug("Return from submitting allergies data $status");
             }
@@ -213,6 +303,8 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         } catch (Exception $ex) {
             $this->emError("Caught exception for project $project_id. Exception: " . $ex);
         }
+
+        return $status;
     }
 
     /**
@@ -242,6 +334,9 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         $fileStatus = file_put_contents($smaCertFile, $cert);
         if (!$fileStatus) {
             $this->emError("Could not create file $smaCertFile");
+            return [[], []];
+        } else {
+            $this->emDebug("Successfully created the cert data file $smaCertFile");
         }
 
         // Retrieve the certificate key, write it to a file so we can use it in the curl call
@@ -250,13 +345,16 @@ class DataTransferToCureSma extends \ExternalModules\AbstractExternalModule {
         $keyStatus = file_put_contents($smaKeyFile, $key);
         if (!$keyStatus) {
             $this->emError("Could not create file $smaKeyFile");
+            return [[], []];
+        } else {
+            $this->emDebug("Successfully created the cert key file $smaKeyFile");
         }
 
         // Retrieve the password for the certificate and the url of the API to CureSMA
         $smaPassword = $this->getSystemSetting('cert-password');
         $smaUrl = $this->getSystemSetting('curesma-url');
         $smaData = array(
-                        'url'        => $smaUrl,
+                        'url'       => $smaUrl,
                         'certFile'  => $smaCertFile,
                         'certKey'   => $smaKeyFile,
                         'password'  => $smaPassword

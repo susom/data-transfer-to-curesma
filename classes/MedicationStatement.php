@@ -17,12 +17,12 @@ class MedicationStatement {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header, $study_id;
-    private $idSystem, $idUse, $fields;
+    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header, $study_id;
+    private $module;
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
-        global $module;
+    public function __construct($module, $pid, $record_id, $study_id, $smaData, $fhirValues) {
 
+        $this->module           = $module;
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
@@ -32,10 +32,6 @@ class MedicationStatement {
         // These are the patient specific parameters for FHIR format
         $this->instrument = $module->getProjectSetting('medication-form');
         $this->event_id = $module->getProjectSetting('medication-event');
-        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
-
-        // Retrieve the fields on the instrument
-        $this->fields = REDCap::getFieldNames($this->instrument);
 
         // Determine the URL and header for the API call
         $this->url = $this->smaData['url'] . '/MedicationStatement/';
@@ -44,7 +40,6 @@ class MedicationStatement {
     }
 
     public function sendMedicationStatementData() {
-        global $module;
 
         // If an instrument is not specified for Conditions (Diagnosis), skip processing.
         if (is_null($this->instrument) || empty($this->instrument)) {
@@ -62,13 +57,13 @@ class MedicationStatement {
             list($url, $body) = $this->packageMedicationStatementData($medicationInfo, $med_id);
 
             // Send to CureSMA
-            //$module->emDebug("Medication URL: " . $url);
-            //$module->emDebug("Medication Header: " . json_encode($this->header));
-            //$module->emDebug("Medication Body: " . $body);
+            //$this->module->emDebug("Medication URL: " . $url);
+            //$this->module->emDebug("Medication Header: " . json_encode($this->header));
+            //$this->module->emDebug("Medication Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
-                $module->emError("Error sending data for project $this->pid, record $this->record_id, Medication " . json_encode($medicationInfo) . " instance $instance_id. Error $error");
+                $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Medication " . json_encode($medicationInfo) . " instance $instance_id. Error $error");
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
@@ -81,11 +76,10 @@ class MedicationStatement {
 
 
     private function getMedicationStatementData() {
-        global $module;
 
         // Retrieve all medication entries for this record that have not been sent and has a medication reference
         try {
-            $filter = "[" . $this->event_name . "][med_sent_to_curesma(1)] = '0' and [" . $this->event_name . "][med_list_id] != ''";
+            $filter = "[med_sent_to_curesma(1)] = '0' and [med_list_id] != ''";
 
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
@@ -93,14 +87,13 @@ class MedicationStatement {
 
         } catch (Exception $ex) {
             $medications = null;
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
 
         return $medications;
     }
 
     private function saveMedicationStatementStatus($instance_id, $medicationInfo, $med_id) {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
@@ -110,12 +103,12 @@ class MedicationStatement {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $medicationInfo, $instance_id, $this->event_id);
             if (!$status) {
-                $module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
+                $this->module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
             } else {
-                $module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
+                $this->module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
             }
         } catch (Exception $ex) {
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
     }
 

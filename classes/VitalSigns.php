@@ -13,7 +13,7 @@ class VitalSigns {
     use httpPutTrait;
 
     private $pid, $record_id, $study_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
-    private $idSystem, $idUse, $fields;
+    private $module;
 
     private $loinc_url = 'http ://loinc.org';
     private $vitalSigns = array(
@@ -28,9 +28,9 @@ class VitalSigns {
         "bpd"       => array("field_name"=>"enc_bp_diastolic", "loinc_code"=>"8462-4", "unit"=>"mm[Hg]", "code"=>"mm[Hg]", "display"=>"BP Diastolic")
     );
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
+    public function __construct($module, $pid, $record_id, $study_id, $smaData, $fhirValues) {
 
-        global $module;
+        $this->module           = $module;
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
@@ -48,7 +48,6 @@ class VitalSigns {
 
     public function sendVitalSignData() {
 
-        global $module;
         $status = true;
 
         // If an instrument is not specified for Observations (Labs), skip processing.
@@ -79,7 +78,6 @@ class VitalSigns {
     }
 
     private function getVitalSignData() {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
@@ -88,11 +86,10 @@ class VitalSigns {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $vitals = $rf->getAllInstances($this->record_id, $this->event_id);
-            //$module->emDebug("Vitals: " . json_encode($vitals));
 
         } catch (Exception $ex) {
             $vitals = null;
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument for Vital Signs");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument for Vital Signs");
         }
 
         return $vitals;
@@ -101,7 +98,6 @@ class VitalSigns {
 
     private function packageAndSendVitalSignData($record_id, $event_id, $instance_id, $vitals)
     {
-        global $module;
         $status = false;
 
         // All the category objects are the same - generic vital signs object
@@ -179,12 +175,16 @@ class VitalSigns {
                 );
 
                 $body = json_encode($vitalsPkg, JSON_UNESCAPED_SLASHES);
-                //$module->emDebug("Body of message to send: " . $body);
+
+                // Send to CureSMA
+                //$this->module->emDebug("URL: " . $url);
+                //$this->module->emDebug("Header: " . json_encode($this->header));
+                //$this->module->emDebug("Body: " . $body);
 
                 //  Send the request for this vital
                 list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
                 if (!$status) {
-                    $module->emError("Error sending Vital Sign data for project $this->pid, record $this->record_id, Vital Sign " . json_encode($vitals) . " instance $instance_id. Error $error");
+                    $this->module->emError("Error sending Vital Sign data for project $this->pid, record $this->record_id, Vital Sign " . json_encode($vitals) . " instance $instance_id. Error $error");
                 } else {
                     $status = true;
                 }
@@ -196,7 +196,6 @@ class VitalSigns {
     }
 
     private function convertVital($vitalType, $value) {
-        global $module;
 
         if ($vitalType == "weight") {
 
@@ -222,7 +221,6 @@ class VitalSigns {
     }
 
     private function saveVitalSignStatus($instance_id) {
-        global $module;
 
         $status = false;
         // Save the fact that we sent this vital sign to CureSMA
@@ -232,14 +230,14 @@ class VitalSigns {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $encountersInfo, $instance_id, $this->event_id);
             if (!$status) {
-                $module->emError("Could not save Vital data for instance $instance_id, project $this->pid, instrument $this->instrument");
+                $this->module->emError("Could not save Vital data for instance $instance_id, project $this->pid, instrument $this->instrument");
                 $status = false;
             } else {
-                $module->emDebug("Sucessfully saved Vital data for instance $instance_id, instrument $this->instrument, project $this->pid");
+                $this->module->emDebug("Sucessfully saved Vital data for instance $instance_id, instrument $this->instrument, project $this->pid");
                 $status = true;
             }
         } catch (Exception $ex) {
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
             $status = false;
         }
 

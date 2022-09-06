@@ -6,7 +6,6 @@ trait httpPutTrait
 {
 
     function  sendPutRequest($url, $headers, $message, $smaData) {
-        global $module;
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -36,11 +35,13 @@ trait httpPutTrait
         if ($http_code == 200) {
             return array(true, null);
         } else {
-            $module->emDebug("HTTP Code: " . $http_code);
-            $module->emDebug("Response: " . json_encode($response));
-            $module->emDebug("Info: " . json_encode($info));
-            $module->emDebug("Error:" . $error);
-            return array(false, $error);
+            $return_error = array (
+                'http_code' => $http_code,
+                'response'  => json_encode($response),
+                'info'      => json_encode($info),
+                'error'     => $error
+            );
+            return array(false, json_encode($return_error));
         }
     }
 

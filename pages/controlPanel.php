@@ -15,7 +15,7 @@ $resources = isset($_POST['resources']) && !empty($_POST['resources']) ? $_POST[
 $module->emDebug("Pid: " . $pid . ", action: " . $action . ", resource list: " . $resources);
 
 if (($action === "sendData") && !empty($resources)) {
-    $status = $module->submitCureSmaData($resources);
+    $status = $module->submitCureSmaData($resources, $pid);
     print $status;
     return;
 } else if (($action === "sendData") && empty($resources)) {
@@ -26,6 +26,7 @@ if (($action === "sendData") && !empty($resources)) {
 
 // Retrieve list of available resources to send to CureSMA
 $resourceList = $module->retrieveResources();
+
 
 ?>
 
@@ -81,6 +82,7 @@ $resourceList = $module->retrieveResources();
             </div>
 
             <div>
+                <input hidden id="redcap_csrf_token" value="<?php echo $module->getCSRFToken(); ?>" />
                 <input class="btn btn-primary btn-block mt-5" type="button" onclick="send()" value="Send resources to CureSMA"></input>
             </div>
 
@@ -122,13 +124,16 @@ $resourceList = $module->retrieveResources();
             }
         }
 
-        DataTransferToCureSMA.sendResources(selected);
+        // Retrieve the token for this page
+        var token = document.getElementById('redcap_csrf_token').value;
+
+        DataTransferToCureSMA.sendResources(selected, token);
     }
 
     var DataTransferToCureSMA = DataTransferToCureSMA || {};
 
     // Make the API call back to the server to send the data
-    DataTransferToCureSMA.sendResources = function(selected) {
+    DataTransferToCureSMA.sendResources = function(selected, token) {
 
         // Display a busy cursor
         $("body").css("cursor", "progress");
@@ -137,7 +142,8 @@ $resourceList = $module->retrieveResources();
             type: "POST",
             data: {
                 "action"        : "sendData",
-                "resources"     : selected
+                "resources"     : selected,
+                "redcap_csrf_token" : token
             },
             success:function(status) {
 

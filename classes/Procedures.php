@@ -25,12 +25,13 @@ class Procedures {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
-    private $idSystem, $idUse, $fields, $study_id, $enc_instrument, $enc_event_id, $enc_event_name;
+    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $study_id, $enc_instrument, $enc_event_id;
+    private $module;
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
-        global $module;
+    public function __construct($module, $pid, $record_id, $study_id, $smaData, $fhirValues) {
 
+        $this->module           = $module;
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
@@ -40,10 +41,6 @@ class Procedures {
         // These are the patient specific parameters for FHIR format
         $this->instrument = $module->getProjectSetting('procedure-form');
         $this->event_id = $module->getProjectSetting('procedure-event');
-        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
-
-        // Retrieve the fields on the instrument
-        $this->fields = REDCap::getFieldNames($this->instrument);
 
         // Determine the URL and header for the API call
         $this->url = $this->smaData['url'] . '/Procedure/';
@@ -52,7 +49,6 @@ class Procedures {
         // We will need to link the procedure to an encounter so retrieve the encounter instrument and event
         $this->enc_instrument = $module->getProjectSetting('encounter-form');
         $this->enc_event_id = $module->getProjectSetting('encounter-event');
-        $this->enc_event_name = REDCap::getEventNames(true, false, $this->enc_event_id);
     }
 
     /**
@@ -63,7 +59,6 @@ class Procedures {
      * @return bool|mixed - true when data was successfully sent to CureSMA
      */
     public function sendProcedureData() {
-        global $module;
 
         // If an instrument is not specified for Procedure, skip processing.
         if (is_null($this->instrument) || empty($this->instrument)) {
@@ -87,13 +82,13 @@ class Procedures {
             list($url, $body) = $this->packageProcedureData($procedureInfo, $enc_id, $proc_id);
 
             // Send to CureSMA
-            //$module->emDebug("URL: " . $url);
-            //$module->emDebug("Header: " . json_encode($this->header));
-            //$module->emDebug("Body: " . $body);
+            //$this->module->emDebug("URL: " . $url);
+            //$this->module->emDebug("Header: " . json_encode($this->header));
+            //$this->module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
-                $module->emError("Error sending data for project $this->pid, record $this->record_id, Procedure " . json_encode($procedureInfo) . " instance $instance. Error $error");
+                $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Procedure " . json_encode($procedureInfo) . " instance $instance. Error $error");
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
@@ -111,17 +106,15 @@ class Procedures {
      */
     private function getProcedureData() {
 
-        global $module;
-
         // Retrieve all procedure entries for this record
         try {
-            $filter = "[" . $this->enc_event_name . "][proc_sent_to_curesma(1)] = '0'";
+            $filter = "[proc_sent_to_curesma(1)] = '0'";
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $procedures = $rf->getAllInstances($this->record_id, $this->event_id);
         } catch (Exception $ex) {
             $procedures = null;
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
 
         return $procedures;
@@ -132,8 +125,6 @@ class Procedures {
      * @return array - encounters stored in repeating forms
      */
     private function getEncounterData() {
-
-        global $module;
 
         $enc_array = array();
         try {
@@ -151,15 +142,13 @@ class Procedures {
 
         } catch (Exception $ex) {
             $encounters = null;
-            $module->emError("Exception when instantiating the Repeating Forms class [encounters] for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class [encounters] for project $this->pid instrument $this->instrument");
         }
 
         return $enc_array;
     }
 
     private function findEncForProcedure($encounters, $proc_date) {
-
-        global $module;
 
         // Use only the date portion of the proc date and not time
         $proc_date_only = substr($proc_date, 0, strpos($proc_date, ' '));
@@ -195,8 +184,6 @@ class Procedures {
      */
     private function saveProcedureStatus($instance_id, $enc_id, $proc_id) {
 
-        global $module;
-
         $procInfo = array();
         // Save the fact that we sent this procedure to CureSMA and store the enc_id in this procedure record
         try {
@@ -207,12 +194,12 @@ class Procedures {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $procInfo, $instance_id, $this->event_id);
             if (!$status) {
-                $module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
+                $this->module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
             } else {
-                $module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
+                $this->module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
             }
         } catch (Exception $ex) {
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
             $status = false;
         }
 
@@ -227,8 +214,6 @@ class Procedures {
      * @return array - URL used to send this resource and the body (package) of the message
      */
     private function packageProcedureData($procedureInfo, $enc_id, $proc_id) {
-
-        global $module;
 
         // Retrieve data for this condition
         $procedureCode = $procedureInfo['proc_code'];

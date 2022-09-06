@@ -5,7 +5,6 @@ namespace Stanford\DataTransferToCureSma;
 require_once "httpPutTrait.php";
 require_once "RepeatingForms.php";
 
-use REDCap;
 use Exception;
 
 /**
@@ -24,12 +23,13 @@ class Allergies {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
-    private $idSystem, $idUse, $fields, $study_id;
+    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $idSystem, $idUse, $study_id;
+    private $module;
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
-        global $module;
+    public function __construct($module, $pid, $record_id, $study_id, $smaData, $fhirValues) {
 
+        $this->module           = $module;
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
@@ -37,12 +37,8 @@ class Allergies {
         $this->study_id         = $study_id;
 
         // These are the patient specific parameters for FHIR format
-        $this->instrument = $module->getProjectSetting('allergy-form');
-        $this->event_id = $module->getProjectSetting('allergy-event');
-        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
-
-        // Retrieve the fields on the instrument
-        $this->fields = REDCap::getFieldNames($this->instrument);
+        $this->instrument = $this->module->getProjectSetting('allergy-form', $this->pid);
+        $this->event_id = $this->module->getProjectSetting('allergy-event', $this->pid);
 
         // Determine the URL and header for the API call
         $this->url = $this->smaData['url'] . '/AllergyIntolerance/';
@@ -57,13 +53,13 @@ class Allergies {
      * @return bool|mixed - true when data was successfully sent to CureSMA
      */
     public function sendAllergyData() {
-        global $module;
 
+        $status = true;
         // If an instrument is not specified for Allergies, skip processing.
         if (is_null($this->instrument) || empty($this->instrument)) {
             return true;
         }
-        $module->emDebug("This is the instrument: " . $this->instrument);
+        $this->module->emDebug("This is the instrument: " . $this->instrument);
 
         // Retrieve patient data for this record
         $allergies = $this->getAllergyData();
@@ -75,13 +71,13 @@ class Allergies {
             list($url, $body) = $this->packageAllergyData($allergyInfo, $allergy_id);
 
             // Send to CureSMA
-            //$module->emDebug("URL: " . $url);
-            //$module->emDebug("Header: " . json_encode($this->header));
-            //$module->emDebug("Body: " . $body);
+            //$this->module->emDebug("URL: " . $url);
+            //$this->module->emDebug("Header: " . json_encode($this->header));
+            //$this->module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
-                $module->emError("Error sending data for project $this->pid, record $this->record_id, Allergy " . json_encode($allergyInfo) . " instance $instance. Error $error");
+                $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Allergy " . json_encode($allergyInfo) . " instance $instance. Error $error");
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
@@ -89,7 +85,6 @@ class Allergies {
             }
         }
 
-        $status = true;
         return $status;
     }
 
@@ -99,17 +94,16 @@ class Allergies {
      * @return array|bool|null
      */
     private function getAllergyData() {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
-            $filter = "[" . $this->event_name . "][all_sent_to_curesma(1)] = '0'";
+            $filter = "[all_sent_to_curesma(1)] = '0'";
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $allergies = $rf->getAllInstances($this->record_id, $this->event_id);
         } catch (Exception $ex) {
             $allergies = null;
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
 
         return $allergies;
@@ -122,7 +116,6 @@ class Allergies {
      * @param $allergyInfo - Allergy description data
      */
     private function saveAllergyStatus($instance_id, $allergyInfo, $allergy_id) {
-        global $module;
 
         // Retrieve all allergy entries for this record
         try {
@@ -132,12 +125,12 @@ class Allergies {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $allergyInfo, $instance_id, $this->event_id);
             if (!$status) {
-                $module->emError("Could not save data for allergy instance $instance_id, project $this->pid, instrument $this->instrument");
+                $this->module->emError("Could not save data for allergy instance $instance_id, project $this->pid, instrument $this->instrument");
             } else {
-                $module->emDebug("Sucessfully saved data for allergy instance $instance_id, instrument $this->instrument, project $this->pid");
+                $this->module->emDebug("Sucessfully saved data for allergy instance $instance_id, instrument $this->instrument, project $this->pid");
             }
         } catch (Exception $ex) {
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
     }
 
@@ -150,8 +143,6 @@ class Allergies {
      * @return array - URL used to send this resource and the body (package) of the message
      */
     private function packageAllergyData($allergyInfo, $allergy_id) {
-
-        global $module;
 
         // Retrieve data for this condition
         $allergyID = $allergy_id;
@@ -166,7 +157,7 @@ class Allergies {
                         )
         );
 
-        // Add what the allergic reaction is.  When I bring over the data, I semi-colon
+        // Add what the allergic reaction is.  When I bring over the data, I insert a semi-colon to
         // separate the reactions so we should split them and submit each as a
         // different code
         $coding = array();

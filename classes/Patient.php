@@ -12,11 +12,11 @@ class Patient {
 
     private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header, $study_id;
     private $idSystem, $idUse, $fields, $raceInfo, $ethnicityInfo;
+    private $module;
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
+    public function __construct($module, $pid, $record_id, $study_id, $smaData, $fhirValues) {
 
-        global $module;
-
+        $this->module           = $module;
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
@@ -24,11 +24,13 @@ class Patient {
         $this->study_id         = $study_id;
 
         // Retrieve the instrument that holds the demographics data
-        $this->instrument = $module->getProjectSetting('demographic-form');
-        $this->event_id = $module->getProjectSetting('demographic-event');
+        $this->instrument = $this->module->getProjectSetting('demographic-form', $this->pid);
+        $this->event_id = $this->module->getProjectSetting('demographic-event', $this->pid);
 
         // Retrieve the fields on this instrument
-        $this->fields = REDCap::getFieldNames($this->instrument);
+        $this->fields = $this->module->getFieldNames($this->instrument, $this->pid);
+        //$this->fields = REDCap::getFieldNames($this->instrument);
+        $this->module->emDebug("Field names: " . json_encode($this->fields));
 
         // Determine the URL and header for the API call
         $this->url = $this->smaData['url'] . '/Patient/' . $this->study_id;
@@ -111,7 +113,6 @@ class Patient {
     }
 
     public function sendPatientData() {
-        global $module;
 
         // If a demographics form is not specified, skip processing of patients
         if (is_null($this->instrument) || empty($this->instrument)) {
@@ -129,14 +130,13 @@ class Patient {
         $body = $this->packagePatientData($person);
 
         // Send to CureSMA
-        //$module->emDebug("URL: " . $this->url);
-        //$module->emDebug("Header: " . json_encode($this->header));
-        //$module->emDebug("Body: " . $body);
+        //$this->module->emDebug("URL: " . $this->url);
+        //$this->module->emDebug("Header: " . json_encode($this->header));
+        //$this->module->emDebug("Body: " . $body);
 
         list($status, $error) = $this->sendPutRequest($this->url, $this->header, $body, $this->smaData);
-        //$module->emDebug("Return from submission for Patient resource, status: " . $status . ", error: " . $error);
         if (!$status) {
-            $module->emError("Error sending data for project $this->pid, record $this->record_id. Error $error");
+            $this->module->emError("Error sending data for project $this->pid, record $this->record_id. Error $error");
         } else {
             $this->savePatientStatus();
         }
@@ -148,21 +148,20 @@ class Patient {
 
         // Retrieve data for this record
         $filter = '[demo_sent_to_curesma(1)] = "0"';
-        $person = REDCap::getData('array', $this->record_id, $this->fields, $this->event_id,
+        $person = REDCap::getData($this->pid, 'array', $this->record_id, $this->fields, $this->event_id,
                                     null, null,null, null, $filter);
 
         return $person;
     }
 
     private function savePatientStatus() {
-        global $module;
 
         // Set the status that say we've sent the data to CureSMA already
         $statusFields[$this->record_id][$this->event_id]['demo_sent_to_curesma'] = array('1' => '1');
         $statusFields[$this->record_id][$this->event_id]['demo_date_sent_curesma'] = date('Y-m-d H:i:s');
         $status = REDCap::saveData($this->pid, 'array', $statusFields, 'normal', 'YMD');
         if (!empty($status['errors'])) {
-            $module->emError("Error saving status for record $this->record_id. Message: " . json_encode($status));
+            $this->module->emError("Error saving status for record $this->record_id. Message: " . json_encode($status));
         }
     }
 

@@ -5,7 +5,6 @@ namespace Stanford\DataTransferToCureSma;
 require_once "httpPutTrait.php";
 require_once "RepeatingForms.php";
 
-use REDCap;
 use Exception;
 
 /**
@@ -25,13 +24,13 @@ class Encounter {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
-    private $idSystem, $idUse, $fields, $study_id;
+    private $pid, $record_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $idSystem, $idUse, $study_id;
+    private $module;
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
+    public function __construct($module, $pid, $record_id, $study_id, $smaData, $fhirValues) {
 
-        global $module;
-
+        $this->module           = $module;
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
@@ -39,12 +38,9 @@ class Encounter {
         $this->study_id         = $study_id;
 
         // These are the patient specific parameters for FHIR format
-        $this->instrument = $module->getProjectSetting('encounter-form');
-        $this->event_id = $module->getProjectSetting('encounter-event');
-        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
-
-        // Retrieve the fields on the instrument
-        $this->fields = REDCap::getFieldNames($this->instrument);
+        $this->instrument = $this->module->getProjectSetting('encounter-form', $this->pid);
+        $this->event_id = $this->module->getProjectSetting('encounter-event', $this->pid);
+        $this->module->emDebug("Encounter Form: " . $this->instrument . ", Encounter Event: " . $this->event_id);
 
         // Determine the URL and header for the API call
         $this->url = $this->smaData['url'] . '/Encounter/';
@@ -76,13 +72,13 @@ class Encounter {
             list($url, $body) = $this->packageEncounterData($encountersInfo, $enc_id);
 
             // Send to CureSMA
-            //$module->emDebug("URL: " . $url);
-            //$module->emDebug("Header: " . json_encode($this->header));
-            //$module->emDebug("Body: " . $body);
+            //$this->module->emDebug("URL: " . $url);
+            //$this->module->emDebug("Header: " . json_encode($this->header));
+            //$this->module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
-                $module->emError("Error sending data for project $this->pid, record $this->record_id, Encounter " . json_encode($encountersInfo) . " instance $instance. Error $error");
+                $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Encounter " . json_encode($encountersInfo) . " instance $instance. Error $error");
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
@@ -100,17 +96,16 @@ class Encounter {
      * @return array - list of encounters to send
      */
     private function getEncounterData() {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
-            $filter = "[" . $this->event_name . "][enc_sent_to_curesma(1)] = '0'";
+            $filter = "[enc_sent_to_curesma(1)] = '0'";
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $encounters = $rf->getAllInstances($this->record_id, $this->event_id);
         } catch (Exception $ex) {
             $encounters = null;
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
 
         return $encounters;
@@ -123,7 +118,6 @@ class Encounter {
      * @param $encountersInfo
      */
     private function saveEncounterStatus($instance_id, $encountersInfo, $enc_id) {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
@@ -133,12 +127,12 @@ class Encounter {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $encountersInfo, $instance_id, $this->event_id);
             if (!$status) {
-                $module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
+                $this->module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
             } else {
-                $module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
+                $this->module->emDebug("Successfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
             }
         } catch (Exception $ex) {
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
     }
 
@@ -151,8 +145,6 @@ class Encounter {
      */
     private function packageEncounterData($encountersInfo, $enc_id) {
 
-        global $module;
-
         // Add the id of this condition to the URL
         $url = $this->url . $enc_id;
 
@@ -164,6 +156,10 @@ class Encounter {
                              "end" => $encountersInfo["enc_end_datetime"]);
         }
         $encStatus = $encountersInfo["enc_status"];
+
+        // Retrieve the provider and specialty for this encounter
+        $prov_name = $encountersInfo['enc_provider'];
+        $prov_specialty = $encountersInfo['enc_prov_specialty'];
 
         // This is the generated test as to the reason for the appointment or hospitalization
         $reason = array("status"    => "generated",
@@ -181,7 +177,9 @@ class Encounter {
             "status"        => $encStatus,
             "text"          => $reason,
             "subject"       => $subject,
-            "period"        => $encDate
+            "period"        => $encDate,
+            "specialty"     => $prov_specialty,
+            "provider"      => $prov_name
         );
 
         $body = json_encode($category, JSON_UNESCAPED_SLASHES);

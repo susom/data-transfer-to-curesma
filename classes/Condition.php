@@ -5,7 +5,6 @@ namespace Stanford\DataTransferToCureSma;
 require_once "httpPutTrait.php";
 require_once "RepeatingForms.php";
 
-use REDCap;
 use Exception;
 
 /**
@@ -26,25 +25,21 @@ class Condition {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
-    private $idSystem, $idUse, $fields, $study_id;
+    private $module, $pid, $record_id, $study_id, $smaData, $fhir = array();
+    private $instrument, $event_id, $url, $header;
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
-        global $module;
+    public function __construct($module, $pid, $record_id, $study_id, $smaData, $fhirValues) {
 
+        $this->module           = $module;
         $this->pid              = $pid;
         $this->record_id        = $record_id;
+        $this->study_id         = $study_id;
         $this->smaData          = $smaData;
         $this->fhir             = $fhirValues;
-        $this->study_id         = $study_id;
 
         // These are the patient specific parameters for FHIR format
-        $this->instrument = $module->getProjectSetting('diagnosis-form');
-        $this->event_id = $module->getProjectSetting('diagnosis-event');
-        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
-
-        // Retrieve the fields on the instrument
-        $this->fields = REDCap::getFieldNames($this->instrument);
+        $this->instrument = $this->module->getProjectSetting('diagnosis-form', $this->pid);
+        $this->event_id   = $this->module->getProjectSetting('diagnosis-event', $this->pid);
 
         // Determine the URL and header for the API call
         $this->url = $this->smaData['url'] . '/Condition/';
@@ -59,8 +54,8 @@ class Condition {
      * @return bool|mixed - true when data was successfully sent to CureSMA
      */
     public function sendConditionData() {
-        global $module;
 
+        $this->module->emDebug("Sending data for record " . $this->record_id);
         // If an instrument is not specified for Conditions (Diagnosis), skip processing.
         if (is_null($this->instrument) || empty($this->instrument)) {
             return true;
@@ -68,7 +63,6 @@ class Condition {
 
         // Retrieve patient data for this record
         $conditions = $this->getConditionData();
-        //$module->emDebug("This is the condition data: " . json_encode($conditions));
 
         $sentInstances = array();
         foreach($conditions[$this->record_id][$this->event_id] as $instance => $conditionInfo) {
@@ -78,13 +72,13 @@ class Condition {
             list($url, $body) = $this->packageConditionData($conditionInfo, $dx_id);
 
             // Send to CureSMA
-            //$module->emDebug("URL: " . $url);
-            //$module->emDebug("Header: " . json_encode($this->header));
-            //$module->emDebug("Body: " . $body);
+            //$this->module->emDebug("URL: " . $url);
+            //$this->module->emDebug("Header: " . json_encode($this->header));
+            //$this->module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
-                $module->emError("Error sending data for project $this->pid, record $this->record_id, Condition " . json_encode($conditionInfo) . " instance $instance. Error $error");
+                $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Condition " . json_encode($conditionInfo) . " instance $instance. Error $error");
             } else {
 
                 // Set the checkbox to say the data was sent to CureSMA
@@ -101,17 +95,16 @@ class Condition {
      * @return array|bool|null
      */
     private function getConditionData() {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
-            $filter = "[" . $this->event_name . "][dx_sent_to_curesma(1)] = '0'";
+            $filter = "[dx_sent_to_curesma(1)] = '0'";
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $conditions = $rf->getAllInstances($this->record_id, $this->event_id);
         } catch (Exception $ex) {
             $conditions = null;
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
 
         return $conditions;
@@ -124,7 +117,6 @@ class Condition {
      * @param $conditionInfo - Condition description data
      */
     private function saveConditionStatus($instance_id, $conditionInfo, $dx_id) {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
@@ -134,12 +126,12 @@ class Condition {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $conditionInfo, $instance_id, $this->event_id);
             if (!$status) {
-                $module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
+                $this->module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
             } else {
-                $module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
+                $this->module->emDebug("Successfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
             }
         } catch (Exception $ex) {
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
     }
 

@@ -12,12 +12,12 @@ class Observation {
 
     use httpPutTrait;
 
-    private $pid, $record_id, $study_id, $event_id, $event_name, $instrument, $fhir = array(), $smaData, $header;
-    private $idSystem, $idUse, $fields;
+    private $pid, $record_id, $study_id, $event_id, $instrument, $fhir = array(), $smaData, $header;
+    private $module;
 
-    public function __construct($pid, $record_id, $study_id, $smaData, $fhirValues) {
+    public function __construct($module, $pid, $record_id, $study_id, $smaData, $fhirValues) {
 
-        global $module;
+        $this->module           = $module;
         $this->pid              = $pid;
         $this->record_id        = $record_id;
         $this->smaData          = $smaData;
@@ -25,12 +25,8 @@ class Observation {
         $this->study_id         = $study_id;
 
         // These are the patient specific parameters for FHIR format
-        $this->instrument = $module->getProjectSetting('lab-form');
-        $this->event_id = $module->getProjectSetting('lab-event');
-        $this->event_name = REDCap::getEventNames(true, false, $this->event_id);
-
-        // Retrieve the fields on the instrument
-        $this->fields = REDCap::getFieldNames($this->instrument);
+        $this->instrument = $module->getProjectSetting('lab-form', $this->pid);
+        $this->event_id = $module->getProjectSetting('lab-event', $this->pid);
 
         // Determine the URL and header for the API call
         $this->url = $this->smaData['url'] . '/Observation/';
@@ -39,8 +35,6 @@ class Observation {
 
     public function sendObservationData() {
 
-        global $module;
-
         // If an instrument is not specified for Observations (Labs), skip processing.
         if (is_null($this->instrument) || empty($this->instrument)) {
             return true;
@@ -48,7 +42,6 @@ class Observation {
 
         // Retrieve patient data for this record
         $observation = $this->getObservationData();
-        //$module->emDebug("Observation data to send: " . json_encode($observation));
 
         foreach ($observation[$this->record_id][$this->event_id] as $instance_id => $observationInfo) {
 
@@ -57,13 +50,13 @@ class Observation {
             list($url, $body) = $this->packageObservationData($observationInfo, $lab_id);
 
             // Send to CureSMA
-            //$module->emDebug("URL: " . $url);
-            //$module->emDebug("Header: " . json_encode($this->header));
-            //$module->emDebug("Body: " . $body);
+            //$this->module->emDebug("URL: " . $url);
+            //$this->module->emDebug("Header: " . json_encode($this->header));
+            //$this->module->emDebug("Body: " . $body);
 
             list($status, $error) = $this->sendPutRequest($url, $this->header, $body, $this->smaData);
             if (!$status) {
-                $module->emError("Error sending data for project $this->pid, record $this->record_id, Observation " . json_encode($observationInfo) . " instance $instance_id. Error $error");
+                $this->module->emError("Error sending data for project $this->pid, record $this->record_id, Observation " . json_encode($observationInfo) . " instance $instance_id. Error $error");
             } else {
                 // If the resource was successfully sent, update the database to show the data was sent
                 $this->saveObservationStatus($instance_id, $observationInfo, $lab_id);
@@ -74,24 +67,22 @@ class Observation {
     }
 
     private function getObservationData() {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
-            $filter = '[' . $this->event_name . '][lab_sent_to_curesma(1)] = "0"';
+            $filter = '[lab_sent_to_curesma(1)] = "0"';
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $rf->loadData($this->record_id, $this->event_id, $filter);
             $labs = $rf->getAllInstances($this->record_id, $this->event_id);
         } catch (Exception $ex) {
             $labs = null;
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
 
         return $labs;
     }
 
     private function saveObservationStatus($instance_id, $observationInfo, $lab_id) {
-        global $module;
 
         // Retrieve all diagnosis entries for this record
         try {
@@ -101,19 +92,17 @@ class Observation {
             $rf = new RepeatingForms($this->pid, $this->instrument);
             $status = $rf->saveInstance($this->record_id, $observationInfo, $instance_id, $this->event_id);
             if (!$status) {
-                $module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
+                $this->module->emError("Could not save data for instance $instance_id, project $this->pid, instrument $this->instrument");
             } else {
-                $module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
+                $this->module->emDebug("Sucessfully saved data for instance $instance_id, instrument $this->instrument, project $this->pid");
             }
         } catch (Exception $ex) {
-            $module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
+            $this->module->emError("Exception when instantiating the Repeating Forms class for project $this->pid instrument $this->instrument");
         }
     }
 
 
     private function packageObservationData($labs, $lab_id) {
-
-        global $module;
 
         // Retrieve the data for this lab result
         $labDateTime = $labs['lab_date_time'];
@@ -249,8 +238,6 @@ class Observation {
 
     function returnLabResult($labValue) {
 
-        global $module;
-
         $value = trim($labValue);
 
         // Check to see if there is a comparator in the result value: <, <=, >, >=
@@ -284,7 +271,6 @@ class Observation {
             }
         }
 
-        //$module->emDebug("Location of /: $nloc, numerator: $numerator, denominator: $denominator, final result: $labResult");
         return array($labResult,$comparator);
     }
 

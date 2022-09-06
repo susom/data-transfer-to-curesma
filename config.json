@@ -15,6 +15,8 @@
 		}
 	],
 
+    "framework-version": 9,
+
 	"permissions": [
 	],
 
@@ -32,10 +34,19 @@
 	},
 
 	"no-auth-pages": [
-
 	],
 
-	"project-settings": [
+    "crons": [
+        {
+            "cron_name": "cron_send_data_to_curesma",
+            "cron_description": "This cron will run once a week to send patient data to CureSMA",
+            "method": "sendToCureSMA",
+            "cron_frequency": 1800,
+            "cron_max_run_time": 10800
+        }
+    ],
+
+    "project-settings": [
 		{
 			"key": "enable-project-debug-logging",
 			"name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
